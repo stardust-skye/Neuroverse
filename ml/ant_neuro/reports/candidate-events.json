@@ -1,0 +1,1515 @@
+{
+  "reader": {
+    "antio": "0.7.1",
+    "mne": "1.13.2"
+  },
+  "training_performed": false,
+  "candidate_method": {
+    "display_filter_hz": [
+      0.5,
+      40.0
+    ],
+    "frontal_band_hz": [
+      0.5,
+      8.0
+    ],
+    "temporal_band_hz": [
+      20.0,
+      40.0
+    ],
+    "envelope_window_seconds": 0.1,
+    "threshold": "max(median + 5 scaled MAD, 98th percentile)",
+    "merge_gap_seconds": 0.12,
+    "candidate_only": true,
+    "marker_codes_used_for_labels": false
+  },
+  "wink_side_distinguishable": null,
+  "wink_side_assessment": "Not established: lateralized frontal activity is a review cue, not ground truth for left versus right wink.",
+  "records": [
+    {
+      "file": "8_team8_2026-11-07_15-25-37.cnt",
+      "format": "ANT Neuro CNT/eeph",
+      "file_version": "4.3",
+      "sampling_hz": 500.0,
+      "samples": 11702,
+      "duration_seconds": 23.404,
+      "measurement_start": "2026-11-07T20:25:37.069982+00:00",
+      "channel_names": [
+        "Fp1",
+        "Fp2",
+        "F9",
+        "F7",
+        "F3",
+        "Fz",
+        "F4",
+        "F8",
+        "F10",
+        "T9",
+        "T7",
+        "C3",
+        "C4",
+        "T8",
+        "T10",
+        "P9",
+        "P7",
+        "P3",
+        "Pz",
+        "P4",
+        "P8",
+        "P10",
+        "O1",
+        "O2"
+      ],
+      "channel_types": [
+        "eeg",
+        "eeg",
+        "eeg",
+        "eeg",
+        "eeg",
+        "eeg",
+        "eeg",
+        "eeg",
+        "eeg",
+        "eeg",
+        "eeg",
+        "eeg",
+        "eeg",
+        "eeg",
+        "eeg",
+        "eeg",
+        "eeg",
+        "eeg",
+        "eeg",
+        "eeg",
+        "eeg",
+        "eeg",
+        "eeg",
+        "eeg"
+      ],
+      "annotations": [
+        {
+          "onset_seconds": 5.23,
+          "duration_seconds": 0.0,
+          "description": "1001",
+          "interpretation": "undocumented"
+        }
+      ],
+      "signal": {
+        "all_finite": true,
+        "min_volts": -0.000200609375,
+        "max_volts": 0.0290506015625,
+        "channel_std_volts": {
+          "Fp1": 0.0021664499090298483,
+          "Fp2": 0.0016444833827304187,
+          "F9": 0.000861198585729682,
+          "F7": 0.0004235480862533807,
+          "F3": 8.591964362912777e-05,
+          "Fz": 8.249403016081265e-05,
+          "F4": 0.00010237495686613757,
+          "F8": 0.00019496022301893165,
+          "F10": 0.000884978249993276,
+          "T9": 0.00010807466071173282,
+          "T7": 8.389858838565083e-05,
+          "C3": 9.94246010797122e-05,
+          "C4": 0.00019229266804557716,
+          "T8": 0.00010111230871343045,
+          "T10": 0.0002785669763122835,
+          "P9": 0.00011180641727103986,
+          "P7": 8.691410177093862e-05,
+          "P3": 8.89669348481188e-05,
+          "Pz": 0.00013124333008887986,
+          "P4": 7.086199111068809e-05,
+          "P8": 0.00017171307634603525,
+          "P10": 9.042367635182791e-05,
+          "O1": 0.0002469423297597616,
+          "O2": 0.00011398026671770462
+        }
+      },
+      "candidates": [
+        {
+          "event_id": "candidate-001",
+          "start_seconds": 12.096,
+          "end_seconds": 12.304,
+          "detectors": [
+            "frontal_low_frequency"
+          ],
+          "peak_score": 1.36,
+          "features": [
+            {
+              "start_seconds": 12.096,
+              "end_seconds": 12.304,
+              "detector": "frontal_low_frequency",
+              "peak_ratio": 1.357,
+              "peak_amplitude_uv": 880.788,
+              "peak_prominence_uv": 544.612,
+              "mean_energy_uv2": 630722.581,
+              "mean_channel_variance_uv2": 10282.521,
+              "threshold_uv": 649.145,
+              "local_baseline_uv": 219.898,
+              "channels": [
+                "Fp1",
+                "Fp2",
+                "F9",
+                "F7",
+                "F3",
+                "Fz",
+                "F4",
+                "F8",
+                "F10"
+              ],
+              "band_hz": [
+                0.5,
+                8.0
+              ]
+            }
+          ]
+        },
+        {
+          "event_id": "candidate-002",
+          "start_seconds": 12.448,
+          "end_seconds": 12.712,
+          "detectors": [
+            "frontal_low_frequency",
+            "temporal_high_frequency"
+          ],
+          "peak_score": 1.51,
+          "features": [
+            {
+              "start_seconds": 12.448,
+              "end_seconds": 12.532,
+              "detector": "temporal_high_frequency",
+              "peak_ratio": 1.125,
+              "peak_amplitude_uv": 8.997,
+              "peak_prominence_uv": 7.195,
+              "mean_energy_uv2": 74.629,
+              "mean_channel_variance_uv2": 83.456,
+              "threshold_uv": 8.0,
+              "local_baseline_uv": 3.358,
+              "channels": [
+                "T9",
+                "T7",
+                "T8",
+                "T10"
+              ],
+              "band_hz": [
+                20.0,
+                40.0
+              ]
+            },
+            {
+              "start_seconds": 12.45,
+              "end_seconds": 12.712,
+              "detector": "frontal_low_frequency",
+              "peak_ratio": 1.509,
+              "peak_amplitude_uv": 979.453,
+              "peak_prominence_uv": 976.94,
+              "mean_energy_uv2": 731083.212,
+              "mean_channel_variance_uv2": 23680.715,
+              "threshold_uv": 649.145,
+              "local_baseline_uv": 208.164,
+              "channels": [
+                "Fp1",
+                "Fp2",
+                "F9",
+                "F7",
+                "F3",
+                "Fz",
+                "F4",
+                "F8",
+                "F10"
+              ],
+              "band_hz": [
+                0.5,
+                8.0
+              ]
+            }
+          ]
+        },
+        {
+          "event_id": "candidate-003",
+          "start_seconds": 14.204,
+          "end_seconds": 14.676,
+          "detectors": [
+            "frontal_lateralized"
+          ],
+          "peak_score": 2.29,
+          "features": [
+            {
+              "start_seconds": 14.204,
+              "end_seconds": 14.676,
+              "detector": "frontal_lateralized",
+              "peak_ratio": 2.291,
+              "peak_amplitude_uv": 255.003,
+              "peak_prominence_uv": 255.001,
+              "mean_energy_uv2": 28674.305,
+              "mean_channel_variance_uv2": 42822.948,
+              "threshold_uv": 111.324,
+              "local_baseline_uv": 37.764,
+              "channels": [
+                "Fp1",
+                "F9",
+                "F7",
+                "F3",
+                "Fp2",
+                "F10",
+                "F8",
+                "F4"
+              ],
+              "band_hz": [
+                0.5,
+                8.0
+              ]
+            }
+          ]
+        },
+        {
+          "event_id": "candidate-004",
+          "start_seconds": 16.232,
+          "end_seconds": 16.314,
+          "detectors": [
+            "temporal_high_frequency"
+          ],
+          "peak_score": 1.11,
+          "features": [
+            {
+              "start_seconds": 16.232,
+              "end_seconds": 16.314,
+              "detector": "temporal_high_frequency",
+              "peak_ratio": 1.111,
+              "peak_amplitude_uv": 8.884,
+              "peak_prominence_uv": 6.81,
+              "mean_energy_uv2": 73.574,
+              "mean_channel_variance_uv2": 84.765,
+              "threshold_uv": 8.0,
+              "local_baseline_uv": 3.952,
+              "channels": [
+                "T9",
+                "T7",
+                "T8",
+                "T10"
+              ],
+              "band_hz": [
+                20.0,
+                40.0
+              ]
+            }
+          ]
+        },
+        {
+          "event_id": "candidate-005",
+          "start_seconds": 19.246,
+          "end_seconds": 19.388,
+          "detectors": [
+            "temporal_high_frequency"
+          ],
+          "peak_score": 1.37,
+          "features": [
+            {
+              "start_seconds": 19.246,
+              "end_seconds": 19.388,
+              "detector": "temporal_high_frequency",
+              "peak_ratio": 1.369,
+              "peak_amplitude_uv": 10.955,
+              "peak_prominence_uv": 8.896,
+              "mean_energy_uv2": 88.936,
+              "mean_channel_variance_uv2": 100.062,
+              "threshold_uv": 8.0,
+              "local_baseline_uv": 3.911,
+              "channels": [
+                "T9",
+                "T7",
+                "T8",
+                "T10"
+              ],
+              "band_hz": [
+                20.0,
+                40.0
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "file": "8_team8_2026-11-07_15-36-38.cnt",
+      "format": "ANT Neuro CNT/eeph",
+      "file_version": "4.3",
+      "sampling_hz": 500.0,
+      "samples": 17778,
+      "duration_seconds": 35.556,
+      "measurement_start": "2026-11-07T20:36:38.536950+00:00",
+      "channel_names": [
+        "Fp1",
+        "Fp2",
+        "F9",
+        "F7",
+        "F3",
+        "Fz",
+        "F4",
+        "F8",
+        "F10",
+        "T9",
+        "T7",
+        "C3",
+        "C4",
+        "T8",
+        "T10",
+        "P9",
+        "P7",
+        "P3",
+        "Pz",
+        "P4",
+        "P8",
+        "P10",
+        "O1",
+        "O2"
+      ],
+      "channel_types": [
+        "eeg",
+        "eeg",
+        "eeg",
+        "eeg",
+        "eeg",
+        "eeg",
+        "eeg",
+        "eeg",
+        "eeg",
+        "eeg",
+        "eeg",
+        "eeg",
+        "eeg",
+        "eeg",
+        "eeg",
+        "eeg",
+        "eeg",
+        "eeg",
+        "eeg",
+        "eeg",
+        "eeg",
+        "eeg",
+        "eeg",
+        "eeg"
+      ],
+      "annotations": [],
+      "signal": {
+        "all_finite": true,
+        "min_volts": 0.0023624921875,
+        "max_volts": 0.0351420078125,
+        "channel_std_volts": {
+          "Fp1": 0.0002828008388164295,
+          "Fp2": 0.0003461876838631927,
+          "F9": 0.0009226632768918606,
+          "F7": 0.00035873565450538213,
+          "F3": 2.89886872244187e-05,
+          "Fz": 4.54527181199588e-05,
+          "F4": 4.7059346805173485e-05,
+          "F8": 0.00011302522097053153,
+          "F10": 0.0008504961402253601,
+          "T9": 0.0002011166230366184,
+          "T7": 0.00010298814812722321,
+          "C3": 0.00022728990752633266,
+          "C4": 8.60617469063153e-05,
+          "T8": 6.802524086683559e-05,
+          "T10": 0.0003288233651490507,
+          "P9": 0.00010602344735609407,
+          "P7": 4.1918650837103796e-05,
+          "P3": 7.100055850332489e-05,
+          "Pz": 7.932274672256998e-05,
+          "P4": 5.536316081681004e-05,
+          "P8": 6.705682852960319e-05,
+          "P10": 0.00015507584823430586,
+          "O1": 0.00033055584822055993,
+          "O2": 6.733952900475764e-05
+        }
+      },
+      "candidates": [
+        {
+          "event_id": "candidate-001",
+          "start_seconds": 23.968,
+          "end_seconds": 24.078,
+          "detectors": [
+            "frontal_lateralized",
+            "frontal_low_frequency"
+          ],
+          "peak_score": 1.16,
+          "features": [
+            {
+              "start_seconds": 23.968,
+              "end_seconds": 24.078,
+              "detector": "frontal_lateralized",
+              "peak_ratio": 1.164,
+              "peak_amplitude_uv": 467.272,
+              "peak_prominence_uv": 361.287,
+              "mean_energy_uv2": 195948.279,
+              "mean_channel_variance_uv2": 542.079,
+              "threshold_uv": 401.423,
+              "local_baseline_uv": 166.091,
+              "channels": [
+                "Fp1",
+                "F9",
+                "F7",
+                "F3",
+                "Fp2",
+                "F10",
+                "F8",
+                "F4"
+              ],
+              "band_hz": [
+                0.5,
+                8.0
+              ]
+            },
+            {
+              "start_seconds": 23.984,
+              "end_seconds": 24.076,
+              "detector": "frontal_low_frequency",
+              "peak_ratio": 1.103,
+              "peak_amplitude_uv": 318.098,
+              "peak_prominence_uv": 208.773,
+              "mean_energy_uv2": 94666.289,
+              "mean_channel_variance_uv2": 319.125,
+              "threshold_uv": 288.445,
+              "local_baseline_uv": 126.373,
+              "channels": [
+                "Fp1",
+                "Fp2",
+                "F9",
+                "F7",
+                "F3",
+                "Fz",
+                "F4",
+                "F8",
+                "F10"
+              ],
+              "band_hz": [
+                0.5,
+                8.0
+              ]
+            }
+          ]
+        },
+        {
+          "event_id": "candidate-002",
+          "start_seconds": 24.298,
+          "end_seconds": 24.53,
+          "detectors": [
+            "frontal_lateralized",
+            "frontal_low_frequency"
+          ],
+          "peak_score": 1.54,
+          "features": [
+            {
+              "start_seconds": 24.298,
+              "end_seconds": 24.53,
+              "detector": "frontal_lateralized",
+              "peak_ratio": 1.536,
+              "peak_amplitude_uv": 616.658,
+              "peak_prominence_uv": 616.658,
+              "mean_energy_uv2": 286861.03,
+              "mean_channel_variance_uv2": 4500.442,
+              "threshold_uv": 401.423,
+              "local_baseline_uv": 236.088,
+              "channels": [
+                "Fp1",
+                "F9",
+                "F7",
+                "F3",
+                "Fp2",
+                "F10",
+                "F8",
+                "F4"
+              ],
+              "band_hz": [
+                0.5,
+                8.0
+              ]
+            },
+            {
+              "start_seconds": 24.302,
+              "end_seconds": 24.524,
+              "detector": "frontal_low_frequency",
+              "peak_ratio": 1.487,
+              "peak_amplitude_uv": 428.88,
+              "peak_prominence_uv": 426.13,
+              "mean_energy_uv2": 141096.583,
+              "mean_channel_variance_uv2": 3666.611,
+              "threshold_uv": 288.445,
+              "local_baseline_uv": 171.615,
+              "channels": [
+                "Fp1",
+                "Fp2",
+                "F9",
+                "F7",
+                "F3",
+                "Fz",
+                "F4",
+                "F8",
+                "F10"
+              ],
+              "band_hz": [
+                0.5,
+                8.0
+              ]
+            }
+          ]
+        },
+        {
+          "event_id": "candidate-003",
+          "start_seconds": 25.21,
+          "end_seconds": 25.306,
+          "detectors": [
+            "frontal_lateralized"
+          ],
+          "peak_score": 1.08,
+          "features": [
+            {
+              "start_seconds": 25.21,
+              "end_seconds": 25.306,
+              "detector": "frontal_lateralized",
+              "peak_ratio": 1.079,
+              "peak_amplitude_uv": 433.052,
+              "peak_prominence_uv": 382.054,
+              "mean_energy_uv2": 177232.592,
+              "mean_channel_variance_uv2": 176.983,
+              "threshold_uv": 401.423,
+              "local_baseline_uv": 235.765,
+              "channels": [
+                "Fp1",
+                "F9",
+                "F7",
+                "F3",
+                "Fp2",
+                "F10",
+                "F8",
+                "F4"
+              ],
+              "band_hz": [
+                0.5,
+                8.0
+              ]
+            }
+          ]
+        },
+        {
+          "event_id": "candidate-004",
+          "start_seconds": 25.632,
+          "end_seconds": 25.696,
+          "detectors": [
+            "frontal_low_frequency"
+          ],
+          "peak_score": 1.05,
+          "features": [
+            {
+              "start_seconds": 25.632,
+              "end_seconds": 25.696,
+              "detector": "frontal_low_frequency",
+              "peak_ratio": 1.045,
+              "peak_amplitude_uv": 301.444,
+              "peak_prominence_uv": 256.508,
+              "mean_energy_uv2": 88246.469,
+              "mean_channel_variance_uv2": 54.834,
+              "threshold_uv": 288.445,
+              "local_baseline_uv": 162.738,
+              "channels": [
+                "Fp1",
+                "Fp2",
+                "F9",
+                "F7",
+                "F3",
+                "Fz",
+                "F4",
+                "F8",
+                "F10"
+              ],
+              "band_hz": [
+                0.5,
+                8.0
+              ]
+            }
+          ]
+        },
+        {
+          "event_id": "candidate-005",
+          "start_seconds": 26.952,
+          "end_seconds": 27.046,
+          "detectors": [
+            "frontal_lateralized",
+            "frontal_low_frequency"
+          ],
+          "peak_score": 1.07,
+          "features": [
+            {
+              "start_seconds": 26.952,
+              "end_seconds": 27.046,
+              "detector": "frontal_low_frequency",
+              "peak_ratio": 1.068,
+              "peak_amplitude_uv": 308.084,
+              "peak_prominence_uv": 259.723,
+              "mean_energy_uv2": 90768.128,
+              "mean_channel_variance_uv2": 210.984,
+              "threshold_uv": 288.445,
+              "local_baseline_uv": 163.882,
+              "channels": [
+                "Fp1",
+                "Fp2",
+                "F9",
+                "F7",
+                "F3",
+                "Fz",
+                "F4",
+                "F8",
+                "F10"
+              ],
+              "band_hz": [
+                0.5,
+                8.0
+              ]
+            },
+            {
+              "start_seconds": 26.96,
+              "end_seconds": 27.04,
+              "detector": "frontal_lateralized",
+              "peak_ratio": 1.055,
+              "peak_amplitude_uv": 423.549,
+              "peak_prominence_uv": 367.015,
+              "mean_energy_uv2": 173097.649,
+              "mean_channel_variance_uv2": 160.712,
+              "threshold_uv": 401.423,
+              "local_baseline_uv": 221.873,
+              "channels": [
+                "Fp1",
+                "F9",
+                "F7",
+                "F3",
+                "Fp2",
+                "F10",
+                "F8",
+                "F4"
+              ],
+              "band_hz": [
+                0.5,
+                8.0
+              ]
+            }
+          ]
+        },
+        {
+          "event_id": "candidate-006",
+          "start_seconds": 28.272,
+          "end_seconds": 28.366,
+          "detectors": [
+            "frontal_lateralized",
+            "frontal_low_frequency"
+          ],
+          "peak_score": 1.08,
+          "features": [
+            {
+              "start_seconds": 28.272,
+              "end_seconds": 28.366,
+              "detector": "frontal_low_frequency",
+              "peak_ratio": 1.079,
+              "peak_amplitude_uv": 311.234,
+              "peak_prominence_uv": 276.172,
+              "mean_energy_uv2": 91954.273,
+              "mean_channel_variance_uv2": 205.683,
+              "threshold_uv": 288.445,
+              "local_baseline_uv": 138.361,
+              "channels": [
+                "Fp1",
+                "Fp2",
+                "F9",
+                "F7",
+                "F3",
+                "Fz",
+                "F4",
+                "F8",
+                "F10"
+              ],
+              "band_hz": [
+                0.5,
+                8.0
+              ]
+            },
+            {
+              "start_seconds": 28.282,
+              "end_seconds": 28.36,
+              "detector": "frontal_lateralized",
+              "peak_ratio": 1.063,
+              "peak_amplitude_uv": 426.903,
+              "peak_prominence_uv": 399.666,
+              "mean_energy_uv2": 174910.29,
+              "mean_channel_variance_uv2": 148.054,
+              "threshold_uv": 401.423,
+              "local_baseline_uv": 188.008,
+              "channels": [
+                "Fp1",
+                "F9",
+                "F7",
+                "F3",
+                "Fp2",
+                "F10",
+                "F8",
+                "F4"
+              ],
+              "band_hz": [
+                0.5,
+                8.0
+              ]
+            }
+          ]
+        },
+        {
+          "event_id": "candidate-007",
+          "start_seconds": 29.72,
+          "end_seconds": 29.794,
+          "detectors": [
+            "frontal_low_frequency"
+          ],
+          "peak_score": 1.05,
+          "features": [
+            {
+              "start_seconds": 29.72,
+              "end_seconds": 29.794,
+              "detector": "frontal_low_frequency",
+              "peak_ratio": 1.049,
+              "peak_amplitude_uv": 302.706,
+              "peak_prominence_uv": 268.436,
+              "mean_energy_uv2": 88687.49,
+              "mean_channel_variance_uv2": 323.44,
+              "threshold_uv": 288.445,
+              "local_baseline_uv": 135.603,
+              "channels": [
+                "Fp1",
+                "Fp2",
+                "F9",
+                "F7",
+                "F3",
+                "Fz",
+                "F4",
+                "F8",
+                "F10"
+              ],
+              "band_hz": [
+                0.5,
+                8.0
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "file": "8_team8_2026-11-07_15-38-02.cnt",
+      "format": "ANT Neuro CNT/eeph",
+      "file_version": "4.3",
+      "sampling_hz": 500.0,
+      "samples": 15650,
+      "duration_seconds": 31.3,
+      "measurement_start": "2026-11-07T20:38:02.643994+00:00",
+      "channel_names": [
+        "Fp1",
+        "Fp2",
+        "F9",
+        "F7",
+        "F3",
+        "Fz",
+        "F4",
+        "F8",
+        "F10",
+        "T9",
+        "T7",
+        "C3",
+        "C4",
+        "T8",
+        "T10",
+        "P9",
+        "P7",
+        "P3",
+        "Pz",
+        "P4",
+        "P8",
+        "P10",
+        "O1",
+        "O2"
+      ],
+      "channel_types": [
+        "eeg",
+        "eeg",
+        "eeg",
+        "eeg",
+        "eeg",
+        "eeg",
+        "eeg",
+        "eeg",
+        "eeg",
+        "eeg",
+        "eeg",
+        "eeg",
+        "eeg",
+        "eeg",
+        "eeg",
+        "eeg",
+        "eeg",
+        "eeg",
+        "eeg",
+        "eeg",
+        "eeg",
+        "eeg",
+        "eeg",
+        "eeg"
+      ],
+      "annotations": [],
+      "signal": {
+        "all_finite": true,
+        "min_volts": 0.0029213125,
+        "max_volts": 0.036110734375,
+        "channel_std_volts": {
+          "Fp1": 0.0001608417188355821,
+          "Fp2": 8.409368770546412e-05,
+          "F9": 0.0001262533205883395,
+          "F7": 0.00011828003006778359,
+          "F3": 8.560024469393842e-05,
+          "Fz": 8.71134977096462e-05,
+          "F4": 9.801950791144773e-05,
+          "F8": 0.0001539704516168135,
+          "F10": 0.0001244044575531374,
+          "T9": 8.179839136059407e-05,
+          "T7": 0.0005268561486499356,
+          "C3": 0.00020296721529018907,
+          "C4": 0.00011402484829848284,
+          "T8": 0.0001800472400059924,
+          "T10": 9.420077932075352e-05,
+          "P9": 0.00019384407159008494,
+          "P7": 0.00010500288996649135,
+          "P3": 0.00012000379781385851,
+          "Pz": 8.067033431786469e-05,
+          "P4": 7.128267688695035e-05,
+          "P8": 0.00012437293830070155,
+          "P10": 0.00024527484471533227,
+          "O1": 0.0002827664905683857,
+          "O2": 0.00015346039009280345
+        }
+      },
+      "candidates": [
+        {
+          "event_id": "candidate-001",
+          "start_seconds": 0.542,
+          "end_seconds": 0.622,
+          "detectors": [
+            "frontal_low_frequency"
+          ],
+          "peak_score": 1.19,
+          "features": [
+            {
+              "start_seconds": 0.542,
+              "end_seconds": 0.622,
+              "detector": "frontal_low_frequency",
+              "peak_ratio": 1.189,
+              "peak_amplitude_uv": 92.617,
+              "peak_prominence_uv": 79.082,
+              "mean_energy_uv2": 7662.925,
+              "mean_channel_variance_uv2": 164.352,
+              "threshold_uv": 77.866,
+              "local_baseline_uv": 15.662,
+              "channels": [
+                "Fp1",
+                "Fp2",
+                "F9",
+                "F7",
+                "F3",
+                "Fz",
+                "F4",
+                "F8",
+                "F10"
+              ],
+              "band_hz": [
+                0.5,
+                8.0
+              ]
+            }
+          ]
+        },
+        {
+          "event_id": "candidate-002",
+          "start_seconds": 2.284,
+          "end_seconds": 2.388,
+          "detectors": [
+            "frontal_low_frequency"
+          ],
+          "peak_score": 1.36,
+          "features": [
+            {
+              "start_seconds": 2.284,
+              "end_seconds": 2.388,
+              "detector": "frontal_low_frequency",
+              "peak_ratio": 1.362,
+              "peak_amplitude_uv": 106.076,
+              "peak_prominence_uv": 100.133,
+              "mean_energy_uv2": 9318.592,
+              "mean_channel_variance_uv2": 395.267,
+              "threshold_uv": 77.866,
+              "local_baseline_uv": 11.431,
+              "channels": [
+                "Fp1",
+                "Fp2",
+                "F9",
+                "F7",
+                "F3",
+                "Fz",
+                "F4",
+                "F8",
+                "F10"
+              ],
+              "band_hz": [
+                0.5,
+                8.0
+              ]
+            }
+          ]
+        },
+        {
+          "event_id": "candidate-003",
+          "start_seconds": 7.356,
+          "end_seconds": 7.424,
+          "detectors": [
+            "frontal_low_frequency"
+          ],
+          "peak_score": 1.14,
+          "features": [
+            {
+              "start_seconds": 7.356,
+              "end_seconds": 7.424,
+              "detector": "frontal_low_frequency",
+              "peak_ratio": 1.141,
+              "peak_amplitude_uv": 88.842,
+              "peak_prominence_uv": 84.616,
+              "mean_energy_uv2": 7255.055,
+              "mean_channel_variance_uv2": 75.637,
+              "threshold_uv": 77.866,
+              "local_baseline_uv": 13.074,
+              "channels": [
+                "Fp1",
+                "Fp2",
+                "F9",
+                "F7",
+                "F3",
+                "Fz",
+                "F4",
+                "F8",
+                "F10"
+              ],
+              "band_hz": [
+                0.5,
+                8.0
+              ]
+            }
+          ]
+        },
+        {
+          "event_id": "candidate-004",
+          "start_seconds": 9.226,
+          "end_seconds": 9.338,
+          "detectors": [
+            "temporal_high_frequency"
+          ],
+          "peak_score": 1.53,
+          "features": [
+            {
+              "start_seconds": 9.226,
+              "end_seconds": 9.338,
+              "detector": "temporal_high_frequency",
+              "peak_ratio": 1.533,
+              "peak_amplitude_uv": 136.871,
+              "peak_prominence_uv": 134.236,
+              "mean_energy_uv2": 15172.327,
+              "mean_channel_variance_uv2": 17037.36,
+              "threshold_uv": 89.273,
+              "local_baseline_uv": 5.283,
+              "channels": [
+                "T9",
+                "T7",
+                "T8",
+                "T10"
+              ],
+              "band_hz": [
+                20.0,
+                40.0
+              ]
+            }
+          ]
+        },
+        {
+          "event_id": "candidate-005",
+          "start_seconds": 9.502,
+          "end_seconds": 9.572,
+          "detectors": [
+            "frontal_lateralized"
+          ],
+          "peak_score": 1.05,
+          "features": [
+            {
+              "start_seconds": 9.502,
+              "end_seconds": 9.572,
+              "detector": "frontal_lateralized",
+              "peak_ratio": 1.051,
+              "peak_amplitude_uv": 42.262,
+              "peak_prominence_uv": 42.258,
+              "mean_energy_uv2": 1731.845,
+              "mean_channel_variance_uv2": 11.82,
+              "threshold_uv": 40.223,
+              "local_baseline_uv": 15.7,
+              "channels": [
+                "Fp1",
+                "F9",
+                "F7",
+                "F3",
+                "Fp2",
+                "F10",
+                "F8",
+                "F4"
+              ],
+              "band_hz": [
+                0.5,
+                8.0
+              ]
+            }
+          ]
+        },
+        {
+          "event_id": "candidate-006",
+          "start_seconds": 12.136,
+          "end_seconds": 12.248,
+          "detectors": [
+            "temporal_high_frequency"
+          ],
+          "peak_score": 1.57,
+          "features": [
+            {
+              "start_seconds": 12.136,
+              "end_seconds": 12.248,
+              "detector": "temporal_high_frequency",
+              "peak_ratio": 1.571,
+              "peak_amplitude_uv": 140.218,
+              "peak_prominence_uv": 138.639,
+              "mean_energy_uv2": 16458.869,
+              "mean_channel_variance_uv2": 17573.374,
+              "threshold_uv": 89.273,
+              "local_baseline_uv": 5.304,
+              "channels": [
+                "T9",
+                "T7",
+                "T8",
+                "T10"
+              ],
+              "band_hz": [
+                20.0,
+                40.0
+              ]
+            }
+          ]
+        },
+        {
+          "event_id": "candidate-007",
+          "start_seconds": 14.812,
+          "end_seconds": 15.134,
+          "detectors": [
+            "frontal_lateralized",
+            "temporal_high_frequency"
+          ],
+          "peak_score": 1.21,
+          "features": [
+            {
+              "start_seconds": 14.812,
+              "end_seconds": 14.92,
+              "detector": "temporal_high_frequency",
+              "peak_ratio": 1.212,
+              "peak_amplitude_uv": 108.181,
+              "peak_prominence_uv": 105.547,
+              "mean_energy_uv2": 10424.465,
+              "mean_channel_variance_uv2": 11380.501,
+              "threshold_uv": 89.273,
+              "local_baseline_uv": 5.042,
+              "channels": [
+                "T9",
+                "T7",
+                "T8",
+                "T10"
+              ],
+              "band_hz": [
+                20.0,
+                40.0
+              ]
+            },
+            {
+              "start_seconds": 14.956,
+              "end_seconds": 15.134,
+              "detector": "frontal_lateralized",
+              "peak_ratio": 1.158,
+              "peak_amplitude_uv": 46.572,
+              "peak_prominence_uv": 46.568,
+              "mean_energy_uv2": 1910.595,
+              "mean_channel_variance_uv2": 33.622,
+              "threshold_uv": 40.223,
+              "local_baseline_uv": 8.596,
+              "channels": [
+                "Fp1",
+                "F9",
+                "F7",
+                "F3",
+                "Fp2",
+                "F10",
+                "F8",
+                "F4"
+              ],
+              "band_hz": [
+                0.5,
+                8.0
+              ]
+            }
+          ]
+        },
+        {
+          "event_id": "candidate-008",
+          "start_seconds": 17.394,
+          "end_seconds": 17.526,
+          "detectors": [
+            "frontal_low_frequency"
+          ],
+          "peak_score": 1.7,
+          "features": [
+            {
+              "start_seconds": 17.394,
+              "end_seconds": 17.526,
+              "detector": "frontal_low_frequency",
+              "peak_ratio": 1.701,
+              "peak_amplitude_uv": 132.486,
+              "peak_prominence_uv": 127.786,
+              "mean_energy_uv2": 13118.564,
+              "mean_channel_variance_uv2": 1104.438,
+              "threshold_uv": 77.866,
+              "local_baseline_uv": 18.653,
+              "channels": [
+                "Fp1",
+                "Fp2",
+                "F9",
+                "F7",
+                "F3",
+                "Fz",
+                "F4",
+                "F8",
+                "F10"
+              ],
+              "band_hz": [
+                0.5,
+                8.0
+              ]
+            }
+          ]
+        },
+        {
+          "event_id": "candidate-009",
+          "start_seconds": 18.504,
+          "end_seconds": 18.706,
+          "detectors": [
+            "frontal_lateralized",
+            "temporal_high_frequency"
+          ],
+          "peak_score": 1.26,
+          "features": [
+            {
+              "start_seconds": 18.504,
+              "end_seconds": 18.606,
+              "detector": "temporal_high_frequency",
+              "peak_ratio": 1.258,
+              "peak_amplitude_uv": 112.276,
+              "peak_prominence_uv": 110.501,
+              "mean_energy_uv2": 11228.683,
+              "mean_channel_variance_uv2": 12319.087,
+              "threshold_uv": 89.273,
+              "local_baseline_uv": 3.872,
+              "channels": [
+                "T9",
+                "T7",
+                "T8",
+                "T10"
+              ],
+              "band_hz": [
+                20.0,
+                40.0
+              ]
+            },
+            {
+              "start_seconds": 18.628,
+              "end_seconds": 18.706,
+              "detector": "frontal_lateralized",
+              "peak_ratio": 1.165,
+              "peak_amplitude_uv": 46.845,
+              "peak_prominence_uv": 46.844,
+              "mean_energy_uv2": 1965.906,
+              "mean_channel_variance_uv2": 27.588,
+              "threshold_uv": 40.223,
+              "local_baseline_uv": 7.415,
+              "channels": [
+                "Fp1",
+                "F9",
+                "F7",
+                "F3",
+                "Fp2",
+                "F10",
+                "F8",
+                "F4"
+              ],
+              "band_hz": [
+                0.5,
+                8.0
+              ]
+            }
+          ]
+        },
+        {
+          "event_id": "candidate-010",
+          "start_seconds": 20.956,
+          "end_seconds": 21.07,
+          "detectors": [
+            "frontal_lateralized"
+          ],
+          "peak_score": 1.43,
+          "features": [
+            {
+              "start_seconds": 20.956,
+              "end_seconds": 21.07,
+              "detector": "frontal_lateralized",
+              "peak_ratio": 1.431,
+              "peak_amplitude_uv": 57.572,
+              "peak_prominence_uv": 57.569,
+              "mean_energy_uv2": 2564.034,
+              "mean_channel_variance_uv2": 55.038,
+              "threshold_uv": 40.223,
+              "local_baseline_uv": 7.052,
+              "channels": [
+                "Fp1",
+                "F9",
+                "F7",
+                "F3",
+                "Fp2",
+                "F10",
+                "F8",
+                "F4"
+              ],
+              "band_hz": [
+                0.5,
+                8.0
+              ]
+            }
+          ]
+        },
+        {
+          "event_id": "candidate-011",
+          "start_seconds": 22.342,
+          "end_seconds": 22.44,
+          "detectors": [
+            "frontal_low_frequency"
+          ],
+          "peak_score": 1.33,
+          "features": [
+            {
+              "start_seconds": 22.342,
+              "end_seconds": 22.44,
+              "detector": "frontal_low_frequency",
+              "peak_ratio": 1.334,
+              "peak_amplitude_uv": 103.9,
+              "peak_prominence_uv": 94.952,
+              "mean_energy_uv2": 9103.547,
+              "mean_channel_variance_uv2": 390.201,
+              "threshold_uv": 77.866,
+              "local_baseline_uv": 23.282,
+              "channels": [
+                "Fp1",
+                "Fp2",
+                "F9",
+                "F7",
+                "F3",
+                "Fz",
+                "F4",
+                "F8",
+                "F10"
+              ],
+              "band_hz": [
+                0.5,
+                8.0
+              ]
+            }
+          ]
+        },
+        {
+          "event_id": "candidate-012",
+          "start_seconds": 23.106,
+          "end_seconds": 23.34,
+          "detectors": [
+            "frontal_lateralized",
+            "temporal_high_frequency"
+          ],
+          "peak_score": 1.34,
+          "features": [
+            {
+              "start_seconds": 23.106,
+              "end_seconds": 23.214,
+              "detector": "temporal_high_frequency",
+              "peak_ratio": 1.343,
+              "peak_amplitude_uv": 119.864,
+              "peak_prominence_uv": 118.179,
+              "mean_energy_uv2": 12355.792,
+              "mean_channel_variance_uv2": 13325.499,
+              "threshold_uv": 89.273,
+              "local_baseline_uv": 3.765,
+              "channels": [
+                "T9",
+                "T7",
+                "T8",
+                "T10"
+              ],
+              "band_hz": [
+                20.0,
+                40.0
+              ]
+            },
+            {
+              "start_seconds": 23.224,
+              "end_seconds": 23.34,
+              "detector": "frontal_lateralized",
+              "peak_ratio": 1.234,
+              "peak_amplitude_uv": 49.634,
+              "peak_prominence_uv": 49.617,
+              "mean_energy_uv2": 2126.884,
+              "mean_channel_variance_uv2": 37.533,
+              "threshold_uv": 40.223,
+              "local_baseline_uv": 9.874,
+              "channels": [
+                "Fp1",
+                "F9",
+                "F7",
+                "F3",
+                "Fp2",
+                "F10",
+                "F8",
+                "F4"
+              ],
+              "band_hz": [
+                0.5,
+                8.0
+              ]
+            }
+          ]
+        },
+        {
+          "event_id": "candidate-013",
+          "start_seconds": 24.87,
+          "end_seconds": 25.014,
+          "detectors": [
+            "frontal_low_frequency"
+          ],
+          "peak_score": 1.8,
+          "features": [
+            {
+              "start_seconds": 24.87,
+              "end_seconds": 25.014,
+              "detector": "frontal_low_frequency",
+              "peak_ratio": 1.8,
+              "peak_amplitude_uv": 140.174,
+              "peak_prominence_uv": 136.856,
+              "mean_energy_uv2": 14108.203,
+              "mean_channel_variance_uv2": 1449.753,
+              "threshold_uv": 77.866,
+              "local_baseline_uv": 19.161,
+              "channels": [
+                "Fp1",
+                "Fp2",
+                "F9",
+                "F7",
+                "F3",
+                "Fz",
+                "F4",
+                "F8",
+                "F10"
+              ],
+              "band_hz": [
+                0.5,
+                8.0
+              ]
+            }
+          ]
+        },
+        {
+          "event_id": "candidate-014",
+          "start_seconds": 26.02,
+          "end_seconds": 26.104,
+          "detectors": [
+            "temporal_high_frequency"
+          ],
+          "peak_score": 1.18,
+          "features": [
+            {
+              "start_seconds": 26.02,
+              "end_seconds": 26.104,
+              "detector": "temporal_high_frequency",
+              "peak_ratio": 1.179,
+              "peak_amplitude_uv": 105.284,
+              "peak_prominence_uv": 103.382,
+              "mean_energy_uv2": 10118.179,
+              "mean_channel_variance_uv2": 12030.427,
+              "threshold_uv": 89.273,
+              "local_baseline_uv": 3.301,
+              "channels": [
+                "T9",
+                "T7",
+                "T8",
+                "T10"
+              ],
+              "band_hz": [
+                20.0,
+                40.0
+              ]
+            }
+          ]
+        },
+        {
+          "event_id": "candidate-015",
+          "start_seconds": 26.23,
+          "end_seconds": 26.3,
+          "detectors": [
+            "frontal_lateralized"
+          ],
+          "peak_score": 1.02,
+          "features": [
+            {
+              "start_seconds": 26.23,
+              "end_seconds": 26.3,
+              "detector": "frontal_lateralized",
+              "peak_ratio": 1.019,
+              "peak_amplitude_uv": 41.005,
+              "peak_prominence_uv": 41.0,
+              "mean_energy_uv2": 1667.343,
+              "mean_channel_variance_uv2": 7.464,
+              "threshold_uv": 40.223,
+              "local_baseline_uv": 9.57,
+              "channels": [
+                "Fp1",
+                "F9",
+                "F7",
+                "F3",
+                "Fp2",
+                "F10",
+                "F8",
+                "F4"
+              ],
+              "band_hz": [
+                0.5,
+                8.0
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

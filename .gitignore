@@ -5,6 +5,7 @@ dist/
 __pycache__/
 .pytest_cache/
 workload_dataset/
+*.cnt
 ml/data/processed/
 ml/models/*.joblib
 ml/reports/heldout_predictions.parquet

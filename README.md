@@ -60,6 +60,28 @@ The shared movement event contract is defined in `src/types.ts`. A future EEG ad
 
 The optional Python pipeline lives in `ml/` and reads the original dataset in `workload_dataset/` without changing it. It trains on N-back **task-condition labels** only: test 1 is the documented low-workload position 1-back condition, test 2 is moderate arithmetic 1-back, and test 3 is high dual arithmetic 2-back. These are experimental task labels, not direct measurements or diagnoses of a participant’s internal mental state. The included dataset README does not define the numeric `phase` values; the pipeline uses phase 2 as the likely task interval based on its timing. Confirm that mapping against the original protocol before interpreting results.
 
+### ANT Neuro gesture annotation
+
+The ANT Neuro EEG recordings are read directly from repository-root `.cnt`
+files with ANTIO/MNE and are not copied or modified. Their activity descriptions
+are session-level only; do not treat every sample in a session as a gesture.
+Inspect recordings and generate signal-based review candidates with:
+
+```sh
+python -m ml.ant_neuro.inspect_cnt
+python -m streamlit run ml/ant_neuro/annotation_app.py
+```
+
+The local review UI filters a copy of the signals for visualization, shows
+frontal/temporal/all-channel traces and event-marker positions, and lets a
+reviewer zoom, adjust candidate times, assign or reject labels, or add intervals
+manually. Candidate signals are not ground truth. Only reviewer-confirmed rows
+are exported to `ml/ant_neuro/annotations/gesture_annotations.csv`; review
+decisions are saved separately so work can resume. Blink, wink, jaw-clench, and
+rest intervals must be reviewed before any gesture model is trained. The
+current recordings have no dedicated EOG/EMG channels, and left-versus-right
+wink distinguishability has not been established.
+
 The current dataset contains 16 documented N-back participants and 48 participant/task recordings, with Emotiv EPOC X 14-channel signals. A sample timestamp analysis estimates about 126.9 Hz for raw rows; the dataset authors' processing code declares a 128 Hz raw rate and 8 Hz power-feature rate. The recordings include vendor-provided Theta, Alpha, BetaL, BetaH, and Gamma band-power columns, with undocumented units. Ten-second windows use the provided band powers; no raw-signal filtering is applied. Scale-sensitive models standardize features inside each training fold only.
 
 Install the Python dependencies if needed:
