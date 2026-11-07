@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import type { PointerEvent as ReactPointerEvent } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
-  ArrowDown, ArrowLeft, ArrowRight, AudioLines, BookOpen, Check,
-  Command, Download, Eye, Gamepad2, Heart, Lightbulb, Menu,
-  PawPrint, Play, Plus, Radio, RotateCcw, ScanFace, Settings2, Sparkles, Stars, Sun, WandSparkles,
+  ArrowDown, ArrowLeft, ArrowRight, AudioLines, BookOpen, Check, Crosshair,
+  Command, Download, Eye, Gamepad2, Heart, Image as ImageIcon, Images, Lightbulb, Menu,
+  PawPrint, Pause, Play, Plus, Radio, Redo2, RotateCcw, Save, ScanFace, Settings2, Sparkles, Stars, Sun, Trash2, Undo2, WandSparkles,
   X, Zap,
 } from 'lucide-react'
 import { story } from './storyData'
@@ -25,10 +26,139 @@ const experiences = [
 const defaultMapping: Record<Movement, Action | 'none'> = {
   BLINK: 'confirm', WINK: 'switch', JAW_CLENCH: 'special', REST: 'none', UNKNOWN: 'none',
 }
+const ART_COLORS = [
+  '#ffffff', '#111318', '#ff4057', '#ff8b38', '#ffd447', '#72da69',
+  '#39e4d1', '#43a5ff', '#9366ff', '#ff62bd', '#a8f0df', '#c4a0ff',
+  '#f3a5a0', '#bad8ff', '#d2f477',
+]
+const ART_COLOR_NAMES = [
+  'White', 'Black', 'Red', 'Orange', 'Yellow', 'Green', 'Cyan', 'Blue', 'Purple',
+  'Pink', 'Mint', 'Lavender', 'Coral', 'Ice blue', 'Lime',
+]
+const BRUSHES = ['normal', 'soft', 'spray', 'neon', 'particle'] as const
+type BrushType = typeof BRUSHES[number]
+type GazeCalibrationPoint = { raw: { x: number; y: number }; target: { x: number; y: number } }
+type GazeMap = { x: [number, number, number]; y: [number, number, number] }
+type StudioPoint = { x: number; y: number }
+
 const movementNames: Record<Movement, string> = {
   BLINK: 'Blink', WINK: 'Wink', JAW_CLENCH: 'Jaw clench', REST: 'Rest', UNKNOWN: 'Unknown',
 }
 const actionNames: Record<Action, string> = { confirm: 'Confirm / interact', switch: 'Switch / change', special: 'Special action' }
+
+function fitGazeMap(samples: GazeCalibrationPoint[]): GazeMap | null {
+  const solve = (axis: 'x' | 'y') => {
+    const matrix = Array.from({ length: 3 }, () => [0, 0, 0, 0])
+    for (const sample of samples) {
+      const row = [sample.raw.x, sample.raw.y, 1]
+      for (let i = 0; i < 3; i++) {
+        for (let j = 0; j < 3; j++) matrix[i][j] += row[i] * row[j]
+        matrix[i][3] += row[i] * sample.target[axis]
+      }
+    }
+    for (let column = 0; column < 3; column++) {
+      let pivot = column
+      for (let row = column + 1; row < 3; row++) {
+        if (Math.abs(matrix[row][column]) > Math.abs(matrix[pivot][column])) pivot = row
+      }
+      if (Math.abs(matrix[pivot][column]) < 1e-8) return null
+      ;[matrix[column], matrix[pivot]] = [matrix[pivot], matrix[column]]
+      const divisor = matrix[column][column]
+      for (let j = column; j < 4; j++) matrix[column][j] /= divisor
+      for (let row = 0; row < 3; row++) {
+        if (row === column) continue
+        const factor = matrix[row][column]
+        for (let j = column; j < 4; j++) matrix[row][j] -= factor * matrix[column][j]
+      }
+    }
+    return matrix.map((row) => row[3]) as [number, number, number]
+  }
+  const x = solve('x')
+  const y = solve('y')
+  return x && y ? { x, y } : null
+}
+
+function drawBrushSegment(
+  context: CanvasRenderingContext2D,
+  from: StudioPoint,
+  to: StudioPoint,
+  color: string,
+  size: number,
+  brush: BrushType,
+) {
+  const dx = to.x - from.x
+  const dy = to.y - from.y
+  const distance = Math.hypot(dx, dy)
+  const angle = Math.atan2(dy, dx)
+  context.save()
+  context.lineCap = 'round'
+  context.lineJoin = 'round'
+  if (brush === 'spray') {
+    const steps = Math.max(1, Math.ceil(distance / Math.max(3, size * 0.35)))
+    for (let step = 0; step <= steps; step++) {
+      const progress = step / steps
+      const centerX = from.x + dx * progress
+      const centerY = from.y + dy * progress
+      const count = Math.min(7, Math.max(3, Math.round(size / 2)))
+      for (let particle = 0; particle < count; particle++) {
+        const theta = Math.random() * Math.PI * 2
+        const radius = Math.sqrt(Math.random()) * size * 1.8
+        context.globalAlpha = 0.28 + Math.random() * 0.62
+        context.fillStyle = color
+        context.beginPath()
+        context.arc(centerX + Math.cos(theta) * radius, centerY + Math.sin(theta) * radius, 0.55 + Math.random() * 1.45, 0, Math.PI * 2)
+        context.fill()
+      }
+    }
+  } else if (brush === 'particle') {
+    const steps = Math.max(1, Math.ceil(distance / Math.max(3, size * 0.3)))
+    for (let step = 0; step <= steps; step++) {
+      const progress = step / steps
+      const centerX = from.x + dx * progress
+      const centerY = from.y + dy * progress
+      for (let particle = 0; particle < 4; particle++) {
+        const side = particle % 2 === 0 ? 1 : -1
+        const trail = Math.random() * size * 1.15
+        const spread = (Math.random() - 0.5) * size * 1.4
+        context.globalAlpha = 0.48 + Math.random() * 0.48
+        context.fillStyle = color
+        context.beginPath()
+        context.arc(
+          centerX - Math.cos(angle) * trail - Math.sin(angle) * spread * side,
+          centerY - Math.sin(angle) * trail + Math.cos(angle) * spread * side,
+          Math.max(0.7, size * (0.08 + Math.random() * 0.16)),
+          0,
+          Math.PI * 2,
+        )
+        context.fill()
+      }
+    }
+  } else {
+    context.beginPath()
+    context.moveTo(from.x, from.y)
+    context.lineTo(to.x, to.y)
+    context.strokeStyle = color
+    context.lineWidth = brush === 'soft' ? size * 1.4 : size
+    if (brush === 'soft') {
+      context.globalAlpha = 0.68
+      context.shadowColor = color
+      context.shadowBlur = size * 1.25
+    } else if (brush === 'neon') {
+      context.shadowColor = color
+      context.shadowBlur = size * 2.8
+      context.lineWidth = size * 1.55
+      context.stroke()
+      context.beginPath()
+      context.moveTo(from.x, from.y)
+      context.lineTo(to.x, to.y)
+      context.strokeStyle = '#ffffff'
+      context.lineWidth = Math.max(1, size * 0.22)
+      context.shadowBlur = size * 0.75
+    }
+    context.stroke()
+  }
+  context.restore()
+}
 
 function readStorage<T>(key: string, fallback: T): T {
   try {
@@ -98,7 +228,7 @@ function App() {
   const reportWebcamStatus = useCallback((active: boolean) => setWebcamActive(active), [])
 
   return (
-    <div className="app-shell">
+    <div className={page === 'create' ? 'app-shell studio-active' : 'app-shell'}>
       <div className="ambient ambient-one" /><div className="ambient ambient-two" />
       <header className="topbar">
         <Brand onClick={() => navigate('home')} />
@@ -124,7 +254,7 @@ function App() {
             {page === 'calibration' && <Calibration navigate={navigate} destination={pendingExperience} source={source} setSource={setSource} onMovement={emit} onWebcamStatus={reportWebcamStatus} currentEvent={currentEvent} mapping={mapping} setMapping={setMapping} />}
             {page === 'story' && <StoryMode navigate={navigate} actionFor={actionFor} lastMovement={currentEvent} adaptation={workloadAdaptation} />}
             {page === 'pet' && <PetMode navigate={navigate} actionFor={actionFor} lastMovement={currentEvent} adaptation={workloadAdaptation} />}
-            {page === 'create' && <CreateMode navigate={navigate} actionFor={actionFor} lastMovement={currentEvent} adaptation={workloadAdaptation} />}
+            {page === 'create' && <CreateMode navigate={navigate} actionFor={actionFor} lastMovement={currentEvent} onMovement={emit} adaptation={workloadAdaptation} onWebcamStatus={reportWebcamStatus} />}
             {page === 'adapt' && <NeuroAdaptDashboard onAdaptation={setWorkloadAdaptation} />}
             {page === 'about' && <About navigate={navigate} />}
           </motion.div>
@@ -278,88 +408,450 @@ function PetMode({ navigate, actionFor, lastMovement, adaptation }: { navigate: 
   </section>
 }
 
-function CreateMode({ navigate, actionFor, lastMovement, adaptation }: { navigate: (page: Page) => void; actionFor: (movement: Movement) => Action | 'none'; lastMovement: MovementEvent | null; adaptation: WorkloadAdaptation }) {
+function CreateMode({ navigate, actionFor, lastMovement, onMovement, adaptation, onWebcamStatus }: { navigate: (page: Page) => void; actionFor: (movement: Movement) => Action | 'none'; lastMovement: MovementEvent | null; onMovement: (event: MovementEvent) => void; adaptation: WorkloadAdaptation; onWebcamStatus: (active: boolean) => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const animationRef = useRef<number | null>(null)
-  const [playing, setPlaying] = useState(true)
-  const [palette, setPalette] = useState(0)
-  const [pattern, setPattern] = useState(0)
-  const [burst, setBurst] = useState(0)
+  const cursorRef = useRef<HTMLDivElement>(null)
+  const undoRef = useRef<HTMLCanvasElement[]>([])
+  const redoRef = useRef<HTMLCanvasElement[]>([])
+  const previousGazeRef = useRef<StudioPoint | null>(null)
+  const previousPointerRef = useRef<StudioPoint | null>(null)
+  const pointerDrawingRef = useRef(false)
+  const gazeMapRef = useRef<GazeMap | null>(null)
+  const captureRef = useRef(false)
+  const gazeSamplesRef = useRef<StudioPoint[]>([])
+  const calibrationDataRef = useRef<GazeCalibrationPoint[]>([])
+  const calibrationTimerRef = useRef<number | null>(null)
+  const pulseTimerRef = useRef<number | null>(null)
+  const lastPulseAtRef = useRef(0)
+  const smoothedCursorRef = useRef<StudioPoint | null>(null)
+  const cameraActiveRef = useRef(false)
+  const drawingRef = useRef(false)
+  const brushRef = useRef<BrushType>('normal')
+  const colorRef = useRef('#ffffff')
+  const sizeRef = useRef(8)
+  const lastMovementAt = useRef(lastMovement?.timestamp ?? 0)
+  const faceDetectedRef = useRef(false)
+  const [brush, setBrush] = useState<BrushType>('normal')
+  const [color, setColor] = useState('#ffffff')
+  const [brushSize, setBrushSize] = useState(8)
+  const [painting, setPainting] = useState(false)
+  const [openPanel, setOpenPanel] = useState<'color' | 'brush' | 'gallery' | null>(null)
+  const [customColor, setCustomColor] = useState('#c7a6ff')
   const [name, setName] = useState('')
   const [gallery, setGallery] = useState<SavedArt[]>(() => readStorage('neuroverse.gallery', []))
-  const lastMovementAt = useRef(lastMovement?.timestamp ?? 0)
-  const palettes = useMemo(() => [['#8c58ff', '#25d9ce', '#fa53aa'], ['#ffb14a', '#f34c79', '#9d6aff'], ['#6be8ff', '#248cff', '#ad80ff']], [])
+  const [message, setMessage] = useState('')
+  const [gazeMap, setGazeMap] = useState<GazeMap | null>(null)
+  const [cursorSource, setCursorSource] = useState<'gaze' | 'pointer' | null>(null)
+  const [cameraActive, setCameraActive] = useState(false)
+  const [faceDetected, setFaceDetected] = useState(false)
+  const [calibrationIndex, setCalibrationIndex] = useState<number | null>(null)
+  const [calibrationCapture, setCalibrationCapture] = useState(false)
+  const [calibrationHint, setCalibrationHint] = useState('')
+
+  const calibrationTargets = [
+    { x: 0.5, y: 0.5, label: 'CENTER' },
+    { x: 0.1, y: 0.1, label: 'TOP LEFT' },
+    { x: 0.9, y: 0.1, label: 'TOP RIGHT' },
+    { x: 0.1, y: 0.9, label: 'BOTTOM LEFT' },
+    { x: 0.9, y: 0.9, label: 'BOTTOM RIGHT' },
+  ]
+  gazeMapRef.current = gazeMap
+  drawingRef.current = painting
+  brushRef.current = brush
+  colorRef.current = color
+  sizeRef.current = brushSize
+  cameraActiveRef.current = cameraActive
+
+  const cloneCanvas = () => {
+    const canvas = canvasRef.current
+    if (!canvas) return null
+    const copy = document.createElement('canvas')
+    copy.width = canvas.width
+    copy.height = canvas.height
+    copy.getContext('2d')?.drawImage(canvas, 0, 0)
+    return copy
+  }
+  const snapshot = () => {
+    const copy = cloneCanvas()
+    if (!copy) return
+    undoRef.current = [...undoRef.current.slice(-29), copy]
+    redoRef.current = []
+  }
+  const restoreCanvas = (image: HTMLCanvasElement | undefined) => {
+    const canvas = canvasRef.current
+    const context = canvas?.getContext('2d')
+    if (!canvas || !context || !image) return
+    context.clearRect(0, 0, canvas.width, canvas.height)
+    context.drawImage(image, 0, 0, image.width, image.height, 0, 0, canvas.clientWidth, canvas.clientHeight)
+  }
+  const undo = () => {
+    const previous = undoRef.current.pop()
+    if (!previous) return
+    const current = cloneCanvas()
+    if (current) redoRef.current.push(current)
+    restoreCanvas(previous)
+  }
+  const redo = () => {
+    const next = redoRef.current.pop()
+    if (!next) return
+    const current = cloneCanvas()
+    if (current) undoRef.current.push(current)
+    restoreCanvas(next)
+  }
+
   useEffect(() => {
     const canvas = canvasRef.current
     const context = canvas?.getContext('2d')
-    if (!canvas || !context) return
-    let width = 0
-    let height = 0
-    const particles = Array.from({ length: 92 }, (_, index) => ({ angle: index * 2.4, radius: 25 + (index * 37) % 190, speed: 0.001 + (index % 8) * 0.00016, size: 1 + (index % 4) * 0.8 }))
+    const container = canvas?.parentElement
+    if (!canvas || !context || !container) return
     const resize = () => {
-      const rect = canvas.getBoundingClientRect()
+      const rect = container.getBoundingClientRect()
+      if (!rect.width || !rect.height) return
+      const copy = cloneCanvas()
       const ratio = Math.min(window.devicePixelRatio || 1, 2)
-      width = rect.width; height = rect.height
-      canvas.width = width * ratio; canvas.height = height * ratio
+      canvas.width = Math.round(rect.width * ratio)
+      canvas.height = Math.round(rect.height * ratio)
       context.setTransform(ratio, 0, 0, ratio, 0, 0)
+      if (copy && copy.width && copy.height) {
+        context.drawImage(copy, 0, 0, copy.width, copy.height, 0, 0, rect.width, rect.height)
+      }
     }
+    const observer = new ResizeObserver(resize)
+    observer.observe(container)
     resize()
-    window.addEventListener('resize', resize)
-    const draw = (time: number) => {
-      context.fillStyle = 'rgba(7, 9, 18, 0.22)'
-      context.fillRect(0, 0, width, height)
-      const cx = width * 0.5, cy = height * 0.49
-      const colors = palettes[palette]
-      const energy = 0.8 + Math.sin(time / 930) * 0.13
-      const glow = context.createRadialGradient(cx, cy, 2, cx, cy, Math.min(width, height) * 0.44)
-      glow.addColorStop(0, `${colors[0]}23`); glow.addColorStop(0.52, `${colors[1]}0b`); glow.addColorStop(1, '#080a1200')
-      context.fillStyle = glow; context.fillRect(0, 0, width, height)
-      for (let ring = 0; ring < 5; ring++) {
-        context.beginPath()
-        context.ellipse(cx, cy, (50 + ring * 31) * energy, (24 + ring * 19) * energy, Math.sin(time / 3400 + ring) * 0.34, 0, Math.PI * 2)
-        context.strokeStyle = `${colors[(ring + pattern) % colors.length]}${ring === 0 ? '54' : '25'}`
-        context.lineWidth = ring === 0 ? 1.3 : 0.7
-        context.stroke()
-      }
-      particles.forEach((particle, index) => {
-        const angle = particle.angle + time * particle.speed * (pattern % 2 ? -1 : 1)
-        const radius = particle.radius * energy + (burst % 2 ? Math.sin(time / 100 + index) * 10 : 0)
-        const x = cx + Math.cos(angle) * radius * (1 + Math.sin(angle * (pattern + 2)) * 0.16)
-        const y = cy + Math.sin(angle) * radius * 0.64
-        context.beginPath(); context.arc(x, y, particle.size, 0, Math.PI * 2)
-        context.fillStyle = colors[index % colors.length]; context.globalAlpha = 0.48 + Math.sin(time / 500 + index) * 0.35; context.fill(); context.globalAlpha = 1
-      })
-      if (burst) {
-        const radius = ((time - burst) / 850) * Math.max(width, height) * 0.7
-        if (radius < Math.max(width, height)) { context.beginPath(); context.arc(cx, cy, radius, 0, Math.PI * 2); context.strokeStyle = `${colors[0]}8a`; context.lineWidth = 2; context.stroke() } else setBurst(0)
-      }
-      if (playing) animationRef.current = requestAnimationFrame(draw)
+    return () => observer.disconnect()
+  }, [])
+
+  const showCursor = (point: StudioPoint, source: 'gaze' | 'pointer') => {
+    const cursor = cursorRef.current
+    if (cursor) {
+      cursor.style.transform = `translate3d(${point.x}px, ${point.y}px, 0) translate(-50%, -50%)`
+      cursor.style.setProperty('--brush-color', colorRef.current)
+      cursor.style.setProperty('--brush-diameter', `${Math.max(8, Math.min(42, sizeRef.current))}px`)
+      cursor.classList.toggle('cursor-gaze', source === 'gaze')
+      cursor.classList.toggle('cursor-pointer', source === 'pointer')
+      cursor.classList.add('is-visible')
     }
-    if (playing) animationRef.current = requestAnimationFrame(draw)
-    return () => { window.removeEventListener('resize', resize); if (animationRef.current !== null) cancelAnimationFrame(animationRef.current) }
-  }, [playing, palette, pattern, burst, palettes])
+    setCursorSource(source)
+  }
+  const handleGaze = useCallback((raw: StudioPoint | null) => {
+    if (!raw) {
+      previousGazeRef.current = null
+      smoothedCursorRef.current = null
+      if (faceDetectedRef.current) {
+        faceDetectedRef.current = false
+        setFaceDetected(false)
+        setMessage('Face not detected · adjust your position or lighting')
+      }
+      cursorRef.current?.classList.remove('is-visible', 'cursor-gaze')
+      setCursorSource(null)
+      return
+    }
+    if (!faceDetectedRef.current) {
+      faceDetectedRef.current = true
+      setFaceDetected(true)
+      setMessage('')
+    }
+    if (captureRef.current) gazeSamplesRef.current.push(raw)
+    const map = gazeMapRef.current
+    const canvas = canvasRef.current
+    if (!map || !canvas) return
+    const screenX = (map.x[0] * raw.x + map.x[1] * raw.y + map.x[2]) * window.innerWidth
+    const screenY = (map.y[0] * raw.x + map.y[1] * raw.y + map.y[2]) * window.innerHeight
+    const rect = canvas.getBoundingClientRect()
+    const target = {
+      x: Math.max(0, Math.min(rect.width, screenX - rect.left)),
+      y: Math.max(0, Math.min(rect.height, screenY - rect.top)),
+    }
+    const previous = smoothedCursorRef.current
+    const smooth = previous
+      ? { x: previous.x + (target.x - previous.x) * 0.24, y: previous.y + (target.y - previous.y) * 0.24 }
+      : target
+    smoothedCursorRef.current = smooth
+    showCursor(smooth, 'gaze')
+    const inside = screenX >= rect.left && screenX <= rect.right && screenY >= rect.top && screenY <= rect.bottom
+    if (drawingRef.current && inside) {
+      const from = previousGazeRef.current ?? smooth
+      const context = canvas.getContext('2d')
+      if (context) drawBrushSegment(context, from, smooth, colorRef.current, sizeRef.current, brushRef.current)
+      const now = performance.now()
+      if (now - lastPulseAtRef.current > 500 && cursorRef.current) {
+        lastPulseAtRef.current = now
+        cursorRef.current.classList.remove('stroke-pulse')
+        cursorRef.current.classList.add('stroke-pulse')
+        if (pulseTimerRef.current !== null) window.clearTimeout(pulseTimerRef.current)
+        pulseTimerRef.current = window.setTimeout(() => cursorRef.current?.classList.remove('stroke-pulse'), 280)
+      }
+      previousGazeRef.current = smooth
+    } else previousGazeRef.current = null
+  }, [])
+  const handleCameraStatus = useCallback((active: boolean) => {
+    setCameraActive(active)
+    cameraActiveRef.current = active
+    onWebcamStatus(active)
+  }, [onWebcamStatus])
+
+  useEffect(() => () => {
+    if (calibrationTimerRef.current !== null) window.clearTimeout(calibrationTimerRef.current)
+    if (pulseTimerRef.current !== null) window.clearTimeout(pulseTimerRef.current)
+  }, [])
+
+  const setDrawMode = (enabled: boolean) => {
+    if (enabled === drawingRef.current) return
+    if (enabled) {
+      snapshot()
+      previousGazeRef.current = null
+      setMessage('GAZE PAINT active · press G, Escape, or PAUSE to stop')
+    } else {
+      previousGazeRef.current = null
+      setMessage('Gaze cursor only · drawing paused')
+    }
+    drawingRef.current = enabled
+    setPainting(enabled)
+  }
+
   useEffect(() => {
     if (!lastMovement || lastMovement.timestamp === lastMovementAt.current) return
     lastMovementAt.current = lastMovement.timestamp
     const action = actionFor(lastMovement.movement)
-    if (action === 'confirm') setPalette((current) => (current + 1) % palettes.length)
-    if (action === 'switch') setPattern((current) => current + 1)
-    if (action === 'special') setBurst(Date.now())
-  }, [lastMovement, actionFor, palettes.length])
+    if (lastMovement.movement === 'WINK' && action === 'switch') {
+      setDrawMode(!drawingRef.current)
+      return
+    }
+    if (lastMovement.movement === 'BLINK' && action === 'confirm') {
+      const next = ART_COLORS[(ART_COLORS.indexOf(colorRef.current) + 1) % ART_COLORS.length]
+      setColor(next)
+      setMessage('Color changed · a blink never starts drawing')
+      return
+    }
+    if (lastMovement.movement === 'JAW_CLENCH' && action === 'special') {
+      const next = BRUSHES[(BRUSHES.indexOf(brushRef.current) + 1) % BRUSHES.length]
+      setBrush(next)
+      setMessage(`${next.toUpperCase()} brush selected`)
+    }
+  }, [lastMovement, actionFor])
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target
+      if (target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))) return
+      if (event.key.toLowerCase() === 'g') {
+        event.preventDefault()
+        setDrawMode(!drawingRef.current)
+      } else if (event.key === 'Escape' && drawingRef.current) {
+        event.preventDefault()
+        setDrawMode(false)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
+  const getCanvasPoint = (event: ReactPointerEvent<HTMLCanvasElement>): StudioPoint => {
+    const rect = event.currentTarget.getBoundingClientRect()
+    return { x: event.clientX - rect.left, y: event.clientY - rect.top }
+  }
+  const pointerDown = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    const point = getCanvasPoint(event)
+    showCursor(point, 'pointer')
+    if (!drawingRef.current || event.button !== 0) return
+    snapshot()
+    pointerDrawingRef.current = true
+    previousPointerRef.current = point
+    event.currentTarget.setPointerCapture(event.pointerId)
+  }
+  const pointerMove = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    const point = getCanvasPoint(event)
+    if (!cameraActiveRef.current || cursorSource !== 'gaze') showCursor(point, 'pointer')
+    if (!pointerDrawingRef.current || !drawingRef.current) return
+    const previous = previousPointerRef.current ?? point
+    const context = canvasRef.current?.getContext('2d')
+    if (context) drawBrushSegment(context, previous, point, colorRef.current, sizeRef.current, brushRef.current)
+    previousPointerRef.current = point
+  }
+  const pointerUp = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    pointerDrawingRef.current = false
+    previousPointerRef.current = null
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
+  }
+
+  const clearCanvas = () => {
+    if (!window.confirm('Clear the canvas? This can be undone.')) return
+    snapshot()
+    const canvas = canvasRef.current
+    const context = canvas?.getContext('2d')
+    if (canvas && context) context.clearRect(0, 0, canvas.width, canvas.height)
+    setOpenPanel(null)
+    setMessage('Canvas cleared · use Undo to restore the previous artwork')
+  }
+  const downloadImage = (image: string, fileName: string) => {
+    const link = document.createElement('a')
+    link.href = image
+    link.download = fileName
+    link.click()
+  }
   const saveArt = () => {
     const canvas = canvasRef.current
     if (!canvas) return
-    const item = { name: name.trim() || `Untitled ${gallery.length + 1}`, image: canvas.toDataURL('image/png'), date: new Date().toLocaleDateString() }
-    const next = [item, ...gallery].slice(0, 8)
-    setGallery(next)
-    localStorage.setItem('neuroverse.gallery', JSON.stringify(next))
-    setName('')
+    let downloaded = false
+    try {
+      const image = canvas.toDataURL('image/png')
+      const item = {
+        name: name.trim() || `Untitled ${gallery.length + 1}`,
+        image,
+        date: new Date().toLocaleDateString(),
+      }
+      downloadImage(image, `${item.name.replace(/[\\/:*?"<>|]/g, '-')}.png`)
+      downloaded = true
+      const next = [item, ...gallery].slice(0, 8)
+      localStorage.setItem('neuroverse.gallery', JSON.stringify(next))
+      setGallery(next)
+      setMessage(`Saved “${item.name}” to your gallery and downloads`)
+      setOpenPanel(null)
+    } catch (reason) {
+      const detail = reason instanceof Error ? `: ${reason.message}` : '.'
+      setMessage(downloaded ? `PNG downloaded, but gallery save failed${detail}` : `Could not export PNG${detail}`)
+    }
   }
-  const clearCanvas = () => { setPlaying(false); const context = canvasRef.current?.getContext('2d'); if (context && canvasRef.current) context.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height) }
-  const downloadArt = () => { const canvas = canvasRef.current; if (!canvas) return; const link = document.createElement('a'); link.download = `${name.trim() || 'neuroverse-art'}.png`; link.href = canvas.toDataURL('image/png'); link.click() }
-  return <section className="experience-page create-page"><div className="experience-toolbar"><button className="back-link" onClick={() => navigate('explore')}><ArrowLeft size={15} /> ALL WORLDS</button><span className="mode-label"><WandSparkles size={14} /> CREATE MODE</span><span className="canvas-live"><i /> CANVAS LIVE</span></div><div className="create-heading"><div><span className="eyebrow">YOUR MOVEMENTS, MADE VISIBLE</span><h1>MAKE SOMETHING<br /><span>UNIVERSE-SIZED.</span></h1></div><p>There’s no wrong move here. Follow a feeling and see where it takes you.</p></div><AdaptationNotice adaptation={adaptation} world="create" />
-    <div className="studio"><div className="studio-canvas"><canvas ref={canvasRef} /><div className="canvas-overlay"><span>NEUROVERSE / GENERATIVE FIELD</span><span>01 — {String(pattern + 1).padStart(2, '0')}</span></div><div className="canvas-toolbar"><button onClick={() => setPlaying(!playing)}>{playing ? <span className="pause-icon">Ⅱ</span> : <Play size={14} />}{playing ? 'PAUSE' : 'PLAY'}</button><button onClick={() => { setBurst(Date.now()); setPattern((current) => current + 1) }}><Sparkles size={14} /> RANDOMIZE</button><button onClick={clearCanvas}><X size={14} /> CLEAR</button><button onClick={downloadArt}><Download size={14} /> EXPORT PNG</button></div><div className="canvas-response">MOVE TO MAKE <span>SPACE · PALETTE</span><i /> <span>A · FORM</span><i /> <span>S · BURST</span></div></div>
-      <aside className="studio-aside"><div className="studio-aside-heading"><span className="eyebrow">ARTWORK SETTINGS</span><Settings2 size={15} /></div><label className="art-name-label">GIVE IT A NAME<input value={name} onChange={(event) => setName(event.target.value)} placeholder="Untitled universe" maxLength={34} /></label><div className="palette-control"><span>COLOR ENERGY</span><div>{palettes.map((colors, index) => <button className={palette === index ? 'palette-button palette-active' : 'palette-button'} key={index} onClick={() => setPalette(index)} aria-label={`Choose palette ${index + 1}`}><i style={{ background: colors[0] }} /><i style={{ background: colors[1] }} /><i style={{ background: colors[2] }} /></button>)}</div></div><button className="button button-primary save-art" onClick={saveArt}><Plus size={15} /> SAVE TO GALLERY</button><div className="gallery-heading"><span className="eyebrow">YOUR GALLERY</span><span>{String(gallery.length).padStart(2, '0')}</span></div><div className="gallery-list">{gallery.length === 0 ? <p className="gallery-empty">Your saved pieces will live here. Make something you love.</p> : gallery.slice(0, 3).map((item, index) => <button className="gallery-item" key={`${item.name}-${index}`} onClick={() => { const image = new Image(); image.onload = () => { const canvas = canvasRef.current; const context = canvas?.getContext('2d'); if (canvas && context) context.drawImage(image, 0, 0, canvas.width, canvas.height) }; image.src = item.image }}><img src={item.image} alt="" /><span><strong>{item.name}</strong><small>{item.date}</small></span><Download size={14} onClick={(event) => { event.stopPropagation(); const link = document.createElement('a'); link.href = item.image; link.download = `${item.name}.png`; link.click() }} /></button>)}</div></aside></div>
+  const loadArt = (item: SavedArt) => {
+    const image = new Image()
+    image.onload = () => {
+      snapshot()
+      const canvas = canvasRef.current
+      const context = canvas?.getContext('2d')
+      if (canvas && context) context.drawImage(image, 0, 0, canvas.clientWidth, canvas.clientHeight)
+      setName(item.name)
+      setOpenPanel(null)
+      setMessage(`Loaded “${item.name}” · use Undo to return to the previous canvas`)
+    }
+    image.onerror = () => setMessage(`Could not load “${item.name}”.`)
+    image.src = item.image
+  }
+
+  const beginCalibration = () => {
+    if (!cameraActive) {
+      setMessage('Enable the webcam before starting gaze calibration')
+      return
+    }
+    calibrationDataRef.current = []
+    setCalibrationHint('Look at the target, then capture each point')
+    setCalibrationCapture(false)
+    setCalibrationIndex(0)
+  }
+  const captureTarget = () => {
+    if (calibrationIndex === null || !cameraActiveRef.current) return
+    captureRef.current = true
+    gazeSamplesRef.current = []
+    setCalibrationCapture(true)
+    setCalibrationHint('Hold your gaze on the target…')
+    calibrationTimerRef.current = window.setTimeout(() => {
+      captureRef.current = false
+      setCalibrationCapture(false)
+      const samples = gazeSamplesRef.current
+      if (samples.length < 8) {
+        setCalibrationHint('Not enough face samples. Check lighting and try this target again.')
+        return
+      }
+      const raw = {
+        x: samples.reduce((sum, point) => sum + point.x, 0) / samples.length,
+        y: samples.reduce((sum, point) => sum + point.y, 0) / samples.length,
+      }
+      const target = calibrationTargets[calibrationIndex]
+      calibrationDataRef.current = [...calibrationDataRef.current, { raw, target }]
+      const nextIndex = calibrationIndex + 1
+      if (nextIndex < calibrationTargets.length) {
+        setCalibrationIndex(nextIndex)
+        setCalibrationHint('Target recorded · continue to the next point')
+        return
+      }
+      const fitted = fitGazeMap(calibrationDataRef.current)
+      if (!fitted) {
+        setCalibrationIndex(null)
+        setCalibrationHint('Calibration was unstable. Try again with steady lighting and head position.')
+        setMessage('Gaze calibration could not estimate a stable screen mapping')
+        return
+      }
+      setGazeMap(fitted)
+      gazeMapRef.current = fitted
+      setCalibrationIndex(null)
+      setCalibrationHint('')
+      setMessage('Gaze calibrated · cursor-only mode is active')
+    }, 1700)
+  }
+
+  const selectColor = (next: string) => {
+    setColor(next)
+    setOpenPanel(null)
+    setMessage('Brush color updated')
+  }
+
+  return <section className="experience-page create-page gaze-studio">
+    <canvas
+      className="studio-paint-canvas"
+      ref={canvasRef}
+      aria-label="Full-screen digital painting canvas"
+      onPointerDown={pointerDown}
+      onPointerMove={pointerMove}
+      onPointerUp={pointerUp}
+      onPointerCancel={pointerUp}
+      onPointerLeave={() => { if (!pointerDrawingRef.current && cursorSource === 'pointer') setCursorSource(null) }}
+    />
+    <div className="studio-topbar">
+      <button className="studio-back" onClick={() => navigate('explore')} aria-label="Back to worlds"><ArrowLeft size={17} /><span>WORLDS</span></button>
+      <label className="studio-name"><ImageIcon size={14} /><input value={name} onChange={(event) => setName(event.target.value)} placeholder="Name this artwork" maxLength={34} aria-label="Artwork name" /></label>
+      <span className={cameraActive ? 'studio-signal signal-active' : 'studio-signal'}><i />{cameraActive ? faceDetected ? gazeMap ? 'GAZE CALIBRATED' : 'FACE DETECTED · CALIBRATE' : 'CAMERA ON · FINDING FACE' : 'GAZE OFF'}</span>
+      <button className="studio-icon-button" onClick={redo} aria-label="Redo" title="Redo"><Redo2 size={16} /></button>
+      <button className="studio-icon-button" onClick={beginCalibration} disabled={!cameraActive} aria-label="Calibrate gaze" title="Calibrate gaze"><Crosshair size={16} /></button>
+      <button className={openPanel === 'gallery' ? 'studio-icon-button selected' : 'studio-icon-button'} onClick={() => setOpenPanel(openPanel === 'gallery' ? null : 'gallery')} aria-label="Open saved gallery" title="Gallery"><Images size={16} /></button>
+    </div>
+    <div className="studio-gaze-tools">
+      <WebcamInput onMovement={onMovement} onStatus={handleCameraStatus} onGaze={handleGaze} compact />
+      <button className="studio-calibrate" onClick={beginCalibration} disabled={!cameraActive}><Crosshair size={15} /> CALIBRATE</button>
+    </div>
+    <div className={`studio-brush-cursor brush-${brush}${painting ? ' is-painting' : ''}${cursorSource ? ' is-visible' : ''}`} ref={cursorRef} aria-hidden="true"><i /></div>
+    <div className="studio-bottom-dock">
+      <div className="studio-toolbar" role="toolbar" aria-label="Creative controls">
+        <div className="studio-control-wrap">
+          <button className={openPanel === 'color' ? 'studio-control is-open' : 'studio-control'} onClick={() => setOpenPanel(openPanel === 'color' ? null : 'color')} aria-expanded={openPanel === 'color'}>
+            <i className="active-color" style={{ backgroundColor: color }} /><span>COLOR</span><small>{color.toUpperCase()}</small>
+          </button>
+          {openPanel === 'color' && <div className="studio-popover color-popover">
+            <div className="popover-heading"><span>PALETTE</span><small>CHOOSE A COLOR</small></div>
+            <div className="color-grid">{ART_COLORS.map((item, index) => <button key={item} className={color.toLowerCase() === item.toLowerCase() ? 'color-swatch is-selected' : 'color-swatch'} style={{ backgroundColor: item }} onClick={() => selectColor(item)} aria-label={`Choose ${ART_COLOR_NAMES[index]}`} title={ART_COLOR_NAMES[index]} />)}</div>
+            <label className="custom-color"><span>CUSTOM</span><input type="color" value={customColor} onChange={(event) => { setCustomColor(event.target.value); selectColor(event.target.value) }} /></label>
+          </div>}
+        </div>
+        <div className="studio-control-wrap">
+          <button className={openPanel === 'brush' ? 'studio-control is-open' : 'studio-control'} onClick={() => setOpenPanel(openPanel === 'brush' ? null : 'brush')} aria-expanded={openPanel === 'brush'}>
+            <span className={`brush-preview brush-${brush}`}><i /></span><span>BRUSH</span><small>{brush.toUpperCase()}</small>
+          </button>
+          {openPanel === 'brush' && <div className="studio-popover brush-popover">
+            <div className="popover-heading"><span>BRUSH</span><small>FIVE DISTINCT TOOLS</small></div>
+            {BRUSHES.map((item) => <button key={item} className={brush === item ? 'brush-option is-selected' : 'brush-option'} onClick={() => { setBrush(item); setOpenPanel(null); setMessage(`${item.toUpperCase()} brush selected`) }}>
+              <span className={`brush-preview brush-${item}`}><i /></span><span><strong>{item[0].toUpperCase() + item.slice(1)}</strong><small>{item === 'normal' ? 'Smooth solid line' : item === 'soft' ? 'Blurred feathered edge' : item === 'spray' ? 'Randomized paint particles' : item === 'neon' ? 'Bright layered glow' : 'Trailing particle flecks'}</small></span>
+            </button>)}
+          </div>}
+        </div>
+        <label className="studio-size"><span>SIZE <b>{brushSize}</b></span><input type="range" min="2" max="40" value={brushSize} onChange={(event) => setBrushSize(Number(event.target.value))} aria-label="Brush size" /></label>
+        <button className={painting ? 'studio-control draw-control is-drawing' : 'studio-control draw-control'} onClick={() => setDrawMode(!painting)} aria-pressed={painting} title="G toggles paint; Escape pauses">
+          {painting ? <Pause size={17} /> : <Play size={17} />}<span>{painting ? 'PAUSE' : 'DRAW'}</span><small>{painting ? 'GAZE PAINT' : 'GAZE CURSOR'}</small>
+        </button>
+        <button className="studio-control" onClick={undo} title="Undo"><Undo2 size={17} /><span>UNDO</span></button>
+        <button className="studio-control" onClick={clearCanvas} title="Clear canvas"><Trash2 size={17} /><span>CLEAR</span></button>
+        <button className="studio-control save-control" onClick={saveArt} title="Save PNG and add to gallery"><Save size={17} /><span>SAVE</span></button>
+      </div>
+      <div className="studio-adapt-note"><Sparkles size={12} /> NEURO-ADAPT {adaptation.difficulty.toUpperCase()} · EEG CURSOR NOT CONNECTED <span>G · DRAW/PAUSE&nbsp;&nbsp; ESC · PAUSE</span></div>
+    </div>
+    <div className="studio-message" role="status">{message || (gazeMap ? 'Gaze cursor only · drawing requires an intentional action' : 'Enable webcam and calibrate for gaze · draw with mouse or keyboard anytime')}</div>
+    {openPanel === 'gallery' && <div className="studio-gallery-popover">
+      <div className="popover-heading"><span>YOUR GALLERY</span><button onClick={() => setOpenPanel(null)} aria-label="Close gallery"><X size={14} /></button></div>
+      {gallery.length === 0 ? <p>No saved artwork yet.</p> : gallery.map((item, index) => <button key={`${item.name}-${index}`} className="gallery-saved-item" onClick={() => loadArt(item)}><img src={item.image} alt="" /><span><strong>{item.name}</strong><small>{item.date}</small></span><Download size={14} onClick={(event) => { event.stopPropagation(); downloadImage(item.image, `${item.name}.png`) }} /></button>)}
+    </div>}
+    {calibrationIndex !== null && <div className="gaze-calibration">
+      <div className="calibration-instructions"><span>WEBCAM GAZE · CALIBRATION {calibrationIndex + 1} / 5</span><p>{calibrationHint || 'Look at the target and capture when ready.'}</p><small>Approximate gaze estimation only. Keep your head steady and use even lighting.</small></div>
+      <div className={calibrationCapture ? 'calibration-target is-capturing' : 'calibration-target'} style={{ left: `${calibrationTargets[calibrationIndex].x * 100}%`, top: `${calibrationTargets[calibrationIndex].y * 100}%` }}><i /><span>{calibrationTargets[calibrationIndex].label}</span></div>
+      <div className="calibration-actions"><button onClick={captureTarget} disabled={calibrationCapture || !cameraActive}>{calibrationCapture ? 'CAPTURING…' : `CAPTURE ${calibrationTargets[calibrationIndex].label}`}</button><button onClick={() => { captureRef.current = false; if (calibrationTimerRef.current !== null) window.clearTimeout(calibrationTimerRef.current); setCalibrationIndex(null); setCalibrationCapture(false) }}>CANCEL</button></div>
+    </div>}
   </section>
 }
 
