@@ -22,3 +22,31 @@ export interface StoryBeat {
   choices?: StoryChoice[]
   ending?: boolean
 }
+
+export interface WorkloadAdaptation {
+  difficulty_level: number
+  difficulty: 'supportive' | 'balanced' | 'challenging'
+  last_adaptation: string
+  hint_available: boolean
+  time_pressure: 'unchanged' | 'reduced'
+  accepted_class: 'low' | 'moderate' | 'high' | null
+  consistent_predictions: number
+}
+
+export interface WorkloadPrediction {
+  window_start: string
+  workload_class: 'low' | 'moderate' | 'high'
+  confidence: number
+  probabilities: Record<'low' | 'moderate' | 'high', number>
+  adaptation: WorkloadAdaptation
+}
+
+export const initialWorkloadAdaptation: WorkloadAdaptation = {
+  difficulty_level: 1,
+  difficulty: 'balanced',
+  last_adaptation: 'Waiting for a recorded EEG demo',
+  hint_available: false,
+  time_pressure: 'unchanged',
+  accepted_class: null,
+  consistent_predictions: 0,
+}

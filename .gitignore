@@ -2,3 +2,10 @@ node_modules/
 dist/
 *.tsbuildinfo
 .vite/
+__pycache__/
+.pytest_cache/
+workload_dataset/
+ml/data/processed/
+ml/models/*.joblib
+ml/reports/heldout_predictions.parquet
+ml/reports/dataset_inspection.json

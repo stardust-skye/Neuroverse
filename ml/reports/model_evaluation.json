@@ -1,0 +1,311 @@
+{
+  "task": "N-back experimental task-condition classification",
+  "label_mapping": {
+    "1": "low",
+    "2": "moderate",
+    "3": "high"
+  },
+  "label_caveat": "Classes are task-condition labels from the dataset documentation, not direct measurements of an individual's internal workload.",
+  "participants": 16,
+  "windows": 6091,
+  "class_counts": {
+    "low": 2005,
+    "moderate": 2027,
+    "high": 2059
+  },
+  "feature_count": 140,
+  "window_seconds": 10,
+  "validation": "5-fold StratifiedGroupKFold grouped by participant",
+  "random_seed": 42,
+  "scikit_learn_version": "1.8.0",
+  "models": {
+    "logistic_regression": {
+      "accuracy": 0.43638154654408146,
+      "precision_macro": 0.424168895156863,
+      "recall_macro": 0.4377355648821193,
+      "f1_macro": 0.4296916395656984,
+      "confusion_matrix": [
+        [
+          1381,
+          306,
+          318
+        ],
+        [
+          558,
+          551,
+          918
+        ],
+        [
+          353,
+          980,
+          726
+        ]
+      ],
+      "per_class": {
+        "low": {
+          "precision": 0.6025305410122164,
+          "recall": 0.6887780548628429,
+          "f1": 0.6427740283919013,
+          "support": 2005
+        },
+        "moderate": {
+          "precision": 0.29994556341861733,
+          "recall": 0.2718302910705476,
+          "f1": 0.2851966873706004,
+          "support": 2027
+        },
+        "high": {
+          "precision": 0.37003058103975534,
+          "recall": 0.35259834871296747,
+          "f1": 0.3611042029345934,
+          "support": 2059
+        }
+      },
+      "participant_folds": [
+        [
+          "subject_02",
+          "subject_05",
+          "subject_06"
+        ],
+        [
+          "subject_03",
+          "subject_11",
+          "subject_13"
+        ],
+        [
+          "subject_01",
+          "subject_09",
+          "subject_14"
+        ],
+        [
+          "subject_04",
+          "subject_10",
+          "subject_12"
+        ],
+        [
+          "subject_07",
+          "subject_08",
+          "subject_15",
+          "subject_16"
+        ]
+      ]
+    },
+    "random_forest": {
+      "accuracy": 0.465604990970284,
+      "precision_macro": 0.44446438820676565,
+      "recall_macro": 0.4669032204709656,
+      "f1_macro": 0.4497822384723685,
+      "confusion_matrix": [
+        [
+          1492,
+          230,
+          283
+        ],
+        [
+          564,
+          499,
+          964
+        ],
+        [
+          494,
+          720,
+          845
+        ]
+      ],
+      "per_class": {
+        "low": {
+          "precision": 0.5850980392156863,
+          "recall": 0.744139650872818,
+          "f1": 0.6551042810098793,
+          "support": 2005
+        },
+        "moderate": {
+          "precision": 0.3443754313319531,
+          "recall": 0.24617661568820917,
+          "f1": 0.28711162255466055,
+          "support": 2027
+        },
+        "high": {
+          "precision": 0.40391969407265776,
+          "recall": 0.4103933948518698,
+          "f1": 0.40713081185256567,
+          "support": 2059
+        }
+      },
+      "participant_folds": [
+        [
+          "subject_02",
+          "subject_05",
+          "subject_06"
+        ],
+        [
+          "subject_03",
+          "subject_11",
+          "subject_13"
+        ],
+        [
+          "subject_01",
+          "subject_09",
+          "subject_14"
+        ],
+        [
+          "subject_04",
+          "subject_10",
+          "subject_12"
+        ],
+        [
+          "subject_07",
+          "subject_08",
+          "subject_15",
+          "subject_16"
+        ]
+      ]
+    },
+    "support_vector_machine": {
+      "accuracy": 0.4501723854867838,
+      "precision_macro": 0.4361983478297227,
+      "recall_macro": 0.45139198055669644,
+      "f1_macro": 0.4397088063856524,
+      "confusion_matrix": [
+        [
+          1386,
+          243,
+          376
+        ],
+        [
+          537,
+          565,
+          925
+        ],
+        [
+          531,
+          737,
+          791
+        ]
+      ],
+      "per_class": {
+        "low": {
+          "precision": 0.5647921760391198,
+          "recall": 0.6912718204488778,
+          "f1": 0.6216640502354788,
+          "support": 2005
+        },
+        "moderate": {
+          "precision": 0.3656957928802589,
+          "recall": 0.27873704982733105,
+          "f1": 0.31634938409854424,
+          "support": 2027
+        },
+        "high": {
+          "precision": 0.37810707456978965,
+          "recall": 0.3841670713938805,
+          "f1": 0.3811129848229342,
+          "support": 2059
+        }
+      },
+      "participant_folds": [
+        [
+          "subject_02",
+          "subject_05",
+          "subject_06"
+        ],
+        [
+          "subject_03",
+          "subject_11",
+          "subject_13"
+        ],
+        [
+          "subject_01",
+          "subject_09",
+          "subject_14"
+        ],
+        [
+          "subject_04",
+          "subject_10",
+          "subject_12"
+        ],
+        [
+          "subject_07",
+          "subject_08",
+          "subject_15",
+          "subject_16"
+        ]
+      ]
+    },
+    "gradient_boosting": {
+      "accuracy": 0.45673945164997537,
+      "precision_macro": 0.4442532764981024,
+      "recall_macro": 0.4574899448958481,
+      "f1_macro": 0.4492625940022614,
+      "confusion_matrix": [
+        [
+          1324,
+          400,
+          281
+        ],
+        [
+          550,
+          523,
+          954
+        ],
+        [
+          370,
+          754,
+          935
+        ]
+      ],
+      "per_class": {
+        "low": {
+          "precision": 0.5900178253119429,
+          "recall": 0.6603491271820449,
+          "f1": 0.6232054601082607,
+          "support": 2005
+        },
+        "moderate": {
+          "precision": 0.3118664281454979,
+          "recall": 0.25801677355698077,
+          "f1": 0.28239740820734344,
+          "support": 2027
+        },
+        "high": {
+          "precision": 0.4308755760368664,
+          "recall": 0.4541039339485187,
+          "f1": 0.44218491369117996,
+          "support": 2059
+        }
+      },
+      "participant_folds": [
+        [
+          "subject_02",
+          "subject_05",
+          "subject_06"
+        ],
+        [
+          "subject_03",
+          "subject_11",
+          "subject_13"
+        ],
+        [
+          "subject_01",
+          "subject_09",
+          "subject_14"
+        ],
+        [
+          "subject_04",
+          "subject_10",
+          "subject_12"
+        ],
+        [
+          "subject_07",
+          "subject_08",
+          "subject_15",
+          "subject_16"
+        ]
+      ]
+    }
+  },
+  "selected_model": "random_forest",
+  "saved_model": "D:\\1Projectss\\Neuroverse\\ml\\models\\workload_classifier.joblib",
+  "heldout_predictions": "D:\\1Projectss\\Neuroverse\\ml\\reports\\heldout_predictions.parquet",
+  "trained_at": "2026-11-07T14:30:58.353878-05:00"
+}

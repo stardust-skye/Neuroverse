@@ -9,9 +9,10 @@ import {
 import { story } from './storyData'
 import { EEG_SERVICE_MESSAGE } from './services/eegService'
 import WebcamInput from './WebcamInput'
-import type { InputSource, Movement, MovementEvent } from './types'
+import { initialWorkloadAdaptation } from './types'
+import type { InputSource, Movement, MovementEvent, WorkloadAdaptation, WorkloadPrediction } from './types'
 
-type Page = 'home' | 'explore' | 'calibration' | 'story' | 'pet' | 'create' | 'about'
+type Page = 'home' | 'explore' | 'calibration' | 'story' | 'pet' | 'create' | 'adapt' | 'about'
 type Action = 'confirm' | 'switch' | 'special'
 type SavedArt = { name: string; image: string; date: string }
 
@@ -47,6 +48,7 @@ function App() {
   const [pendingExperience, setPendingExperience] = useState<'story' | 'pet' | 'create'>('story')
   const [source, setSource] = useState<InputSource>('simulation')
   const [webcamActive, setWebcamActive] = useState(false)
+  const [workloadAdaptation, setWorkloadAdaptation] = useState<WorkloadAdaptation>(initialWorkloadAdaptation)
   const [events, setEvents] = useState<MovementEvent[]>([])
   const [currentEvent, setCurrentEvent] = useState<MovementEvent | null>(null)
   const [debugOpen, setDebugOpen] = useState(false)
@@ -105,6 +107,7 @@ function App() {
           <button className={page === 'home' ? 'nav-active' : ''} onClick={() => navigate('home')}>Home</button>
           <button className={page === 'explore' ? 'nav-active' : ''} onClick={() => navigate('explore')}>Explore</button>
           <button onClick={() => { if (page === 'home') document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' }); else { navigate('home'); window.setTimeout(() => document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' }), 300) } }}>How it works</button>
+          <button className={page === 'adapt' ? 'nav-active' : ''} onClick={() => navigate('adapt')}>NEURO-ADAPT</button>
           <button className={page === 'about' ? 'nav-active' : ''} onClick={() => navigate('about')}>About</button>
         </nav>
         <div className="topbar-right">
@@ -119,9 +122,10 @@ function App() {
             {page === 'home' && <Landing navigate={navigate} onChoose={(experience) => { setPendingExperience(experience); navigate('calibration') }} />}
             {page === 'explore' && <Explore navigate={navigate} onChoose={(experience) => { setPendingExperience(experience); navigate('calibration') }} />}
             {page === 'calibration' && <Calibration navigate={navigate} destination={pendingExperience} source={source} setSource={setSource} onMovement={emit} onWebcamStatus={reportWebcamStatus} currentEvent={currentEvent} mapping={mapping} setMapping={setMapping} />}
-            {page === 'story' && <StoryMode navigate={navigate} actionFor={actionFor} lastMovement={currentEvent} />}
-            {page === 'pet' && <PetMode navigate={navigate} actionFor={actionFor} lastMovement={currentEvent} />}
-            {page === 'create' && <CreateMode navigate={navigate} actionFor={actionFor} lastMovement={currentEvent} />}
+            {page === 'story' && <StoryMode navigate={navigate} actionFor={actionFor} lastMovement={currentEvent} adaptation={workloadAdaptation} />}
+            {page === 'pet' && <PetMode navigate={navigate} actionFor={actionFor} lastMovement={currentEvent} adaptation={workloadAdaptation} />}
+            {page === 'create' && <CreateMode navigate={navigate} actionFor={actionFor} lastMovement={currentEvent} adaptation={workloadAdaptation} />}
+            {page === 'adapt' && <NeuroAdaptDashboard onAdaptation={setWorkloadAdaptation} />}
             {page === 'about' && <About navigate={navigate} />}
           </motion.div>
         </AnimatePresence>
@@ -194,11 +198,12 @@ function Calibration({ navigate, destination, source, setSource, onMovement, onW
   </section>
 }
 
-function StoryMode({ navigate, actionFor, lastMovement }: { navigate: (page: Page) => void; actionFor: (movement: Movement) => Action | 'none'; lastMovement: MovementEvent | null }) {
+function StoryMode({ navigate, actionFor, lastMovement, adaptation }: { navigate: (page: Page) => void; actionFor: (movement: Movement) => Action | 'none'; lastMovement: MovementEvent | null; adaptation: WorkloadAdaptation }) {
   const [beatId, setBeatId] = useState('arrival')
   const [choice, setChoice] = useState(0)
   const beat = story[beatId]
   const [specialMessage, setSpecialMessage] = useState('')
+  const [showHint, setShowHint] = useState(false)
   const progressedAt = useRef(lastMovement?.timestamp ?? 0)
   const selectChoice = (next?: string) => {
     if (!next) return
@@ -217,7 +222,8 @@ function StoryMode({ navigate, actionFor, lastMovement }: { navigate: (page: Pag
   const restart = () => { setBeatId('arrival'); setChoice(0) }
   return <section className="experience-page story-page"><div className="experience-toolbar"><button className="back-link" onClick={() => navigate('explore')}><ArrowLeft size={15} /> ALL WORLDS</button><span className="mode-label"><BookOpen size={14} /> STORY MODE</span><button className="toolbar-action" onClick={restart}><RotateCcw size={14} /> RESTART</button></div>
     <div className="story-layout"><div className="story-artwork"><div className="story-stars" /><div className="story-planet" /><div className="story-station"><i /><i /><i /><span /></div><div className="story-signal"><span /><span /><span /><span /><span /></div><div className="story-art-caption"><span>THE ORPHEUS STATION</span><small>DEEP SPACE · 2149</small></div><span className="chapter-chip">{beat.chapter}</span></div>
-      <div className="story-content"><div className="story-progress"><span>YOUR JOURNEY</span><div><i style={{ width: `${Math.min(100, 18 + Object.keys(story).indexOf(beatId) * 11)}%` }} /></div><span>{String(Object.keys(story).indexOf(beatId) + 1).padStart(2, '0')} / 08</span></div><AnimatePresence mode="wait"><motion.div key={beatId} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.25 }}><span className="eyebrow">THE LAST SIGNAL</span><h1>{beat.title}</h1><p className="story-prose">{beat.text}</p>{beat.dialogue && <div className="dialogue"><span />{beat.dialogue}</div>}{specialMessage && <div className="special-message"><Zap size={14} /> {specialMessage}</div>}
+      <div className="story-content"><div className="story-progress"><span>YOUR JOURNEY</span><div><i style={{ width: `${Math.min(100, 18 + Object.keys(story).indexOf(beatId) * 11)}%` }} /></div><span>{String(Object.keys(story).indexOf(beatId) + 1).padStart(2, '0')} / 08</span></div><AdaptationNotice adaptation={adaptation} world="story" /><AnimatePresence mode="wait"><motion.div key={beatId} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.25 }}><span className="eyebrow">THE LAST SIGNAL</span><h1>{beat.title}</h1><p className="story-prose">{beat.text}</p>{beat.dialogue && <div className="dialogue"><span />{beat.dialogue}</div>}{specialMessage && <div className="special-message"><Zap size={14} /> {specialMessage}</div>}
+        {adaptation.hint_available && !beat.ending && <div className="workload-hint"><div><span className="eyebrow">OPTIONAL STORY HINT · NO TIME PRESSURE</span>{showHint && <p>{beatId === 'arrival' ? 'Trace the transmission to learn more before deciding what to do.' : beatId === 'trace' ? 'The station’s memory may reveal where the voice came from.' : beatId === 'airlock' ? 'The warning and the visitor are both clues; decide which you trust.' : 'Consider how this choice could shape the station’s future.'}</p>}</div><button onClick={() => setShowHint(!showHint)}>{showHint ? 'HIDE HINT' : 'SHOW HINT'}</button></div>}
         {!beat.ending && beat.choices && <div className="story-choices"><span className="eyebrow">WHAT DO YOU DO?</span>{beat.choices.map((item, index) => <button className={choice === index ? 'story-choice choice-active' : 'story-choice'} key={item.label} onClick={() => selectChoice(item.next)}><span className="choice-key">{index === 0 ? '01' : '02'}</span>{item.label}<ArrowRight size={15} /></button>)}</div>}
         {beat.ending && <div className="ending-actions"><span className="ending-badge"><Stars size={15} /> STORY COMPLETE</span><button className="button button-primary" onClick={restart}>PLAY AGAIN <RotateCcw size={14} /></button></div>}</motion.div></AnimatePresence><div className="story-controls"><span><kbd>SPACE</kbd> CHOOSE <kbd>A</kbd> SWITCH{beat.special ? <> <kbd>S</kbd> SPECIAL</> : null}</span><span className="live-feedback"><i /> MOVEMENT INPUT READY</span></div></div></div>
   </section>
@@ -226,7 +232,7 @@ function StoryMode({ navigate, actionFor, lastMovement }: { navigate: (page: Pag
 type PetState = { hunger: number; happiness: number; energy: number; xp: number; level: number; name: string; history: string[]; skin: number }
 const initialPet: PetState = { hunger: 72, happiness: 68, energy: 82, xp: 20, level: 1, name: 'MISO', history: ['Miso found a moonberry.', 'A new friend arrived.'], skin: 0 }
 
-function PetMode({ navigate, actionFor, lastMovement }: { navigate: (page: Page) => void; actionFor: (movement: Movement) => Action | 'none'; lastMovement: MovementEvent | null }) {
+function PetMode({ navigate, actionFor, lastMovement, adaptation }: { navigate: (page: Page) => void; actionFor: (movement: Movement) => Action | 'none'; lastMovement: MovementEvent | null; adaptation: WorkloadAdaptation }) {
   const [pet, setPet] = useState(() => readStorage<PetState>('neuroverse.pet', initialPet))
   const [reaction, setReaction] = useState('A little wonder, just for you.')
   const [renaming, setRenaming] = useState(false)
@@ -268,11 +274,11 @@ function PetMode({ navigate, actionFor, lastMovement }: { navigate: (page: Page)
   const meter = (label: string, value: number, cls: string) => <div className="pet-meter"><div><span>{label}</span><strong>{Math.round(value)}%</strong></div><div className="meter-track"><i className={cls} style={{ width: `${value}%` }} /></div></div>
   return <section className="experience-page pet-page"><div className="experience-toolbar"><button className="back-link" onClick={() => navigate('explore')}><ArrowLeft size={15} /> ALL WORLDS</button><span className="mode-label"><PawPrint size={14} /> PET MODE</span><span className="saved-label"><Check size={13} /> SAVED LOCALLY</span></div>
     <div className="pet-layout"><div className="pet-world"><div className="pet-sky"><span className="sky-moon" /><i className="sky-star star-1" /><i className="sky-star star-2" /><i className="sky-star star-3" /><i className="sky-star star-4" /><div className={`pet-creature skin-${pet.skin}`}><div className="pet-ear ear-left" /><div className="pet-ear ear-right" /><div className="pet-body"><div className="pet-face"><span className="pet-eye eye-left" /><span className="pet-eye eye-right" /><span className="pet-blush blush-left" /><span className="pet-blush blush-right" /><span className="pet-mouth" /></div><span className="pet-belly" /><span className="pet-mark" /></div><div className="pet-feet"><i /><i /></div><span className="pet-tail" /></div><div className="pet-platform" /><div className="pet-nameplate"><span>YOUR COMPANION</span><strong>{pet.name}</strong><small>LEVEL {String(pet.level).padStart(2, '0')} · MOON SPRITE</small></div><div className="pet-speech">{reaction}</div>{renaming ? <form className="rename-form" onSubmit={(event) => { event.preventDefault(); const name = petNameDraft.trim(); if (name) setPet((current) => ({ ...current, name: name.slice(0, 16).toUpperCase() })); setRenaming(false) }}><input aria-label="Pet name" autoFocus maxLength={16} value={petNameDraft} onChange={(event) => setPetNameDraft(event.target.value)} /><button type="submit">SAVE</button><button type="button" onClick={() => setRenaming(false)}>CANCEL</button></form> : <button className="rename-pet" onClick={() => { setPetNameDraft(pet.name); setRenaming(true) }}>RENAME <Plus size={12} /></button>}</div></div>
-      <div className="pet-dashboard"><div className="pet-welcome"><span className="eyebrow">YOUR LITTLE UNIVERSE</span><h1>Meet {pet.name.toLowerCase()}.</h1><p>A tiny moon sprite with a big heart. Every little moment together helps {pet.name.toLowerCase()} grow.</p></div><div className="level-card"><div><span className="eyebrow">GROWING TOGETHER</span><strong>LEVEL {pet.level}</strong></div><div className="xp-track"><i style={{ width: `${pet.xp}%` }} /></div><small>{pet.xp} / 100 XP TO NEXT LEVEL</small></div><div className="pet-meters">{meter('HUNGER', pet.hunger, 'meter-gold')}{meter('HAPPINESS', pet.happiness, 'meter-pink')}{meter('ENERGY', pet.energy, 'meter-cyan')}</div><div className="pet-actions"><span className="eyebrow">SPEND A MOMENT TOGETHER</span><div><button onClick={() => applyAction('confirm')}><span>SPACE</span><Heart size={16} /> Feed</button><button onClick={() => applyAction('switch')}><span>A</span><Sun size={16} /> Play</button><button onClick={() => applyAction('special')}><span>S</span><Sparkles size={16} /> Moonbeam</button></div></div><div className="pet-history"><div><span className="eyebrow">LITTLE MOMENTS</span><span>RECENTLY</span></div>{pet.history.slice(0, 3).map((item, index) => <p key={`${item}-${index}`}><i />{item}</p>)}</div></div></div>
+      <div className="pet-dashboard"><div className="pet-welcome"><span className="eyebrow">YOUR LITTLE UNIVERSE</span><h1>Meet {pet.name.toLowerCase()}.</h1><p>A tiny moon sprite with a big heart. Every little moment together helps {pet.name.toLowerCase()} grow.</p></div><AdaptationNotice adaptation={adaptation} world="pet" /><div className="level-card"><div><span className="eyebrow">GROWING TOGETHER</span><strong>LEVEL {pet.level}</strong></div><div className="xp-track"><i style={{ width: `${pet.xp}%` }} /></div><small>{pet.xp} / 100 XP TO NEXT LEVEL</small></div><div className="pet-meters">{meter('HUNGER', pet.hunger, 'meter-gold')}{meter('HAPPINESS', pet.happiness, 'meter-pink')}{meter('ENERGY', pet.energy, 'meter-cyan')}</div><div className="pet-actions"><span className="eyebrow">SPEND A MOMENT TOGETHER</span><div><button onClick={() => applyAction('confirm')}><span>SPACE</span><Heart size={16} /> Feed</button><button onClick={() => applyAction('switch')}><span>A</span><Sun size={16} /> Play</button><button onClick={() => applyAction('special')}><span>S</span><Sparkles size={16} /> Moonbeam</button></div><p className="pet-adapt-guidance">{adaptation.difficulty === 'challenging' ? 'Optional challenge: try Feed → Play → Moonbeam in a row.' : adaptation.difficulty === 'supportive' ? 'One action at a time is plenty. No timer, no pressure.' : 'Follow Miso’s cues and choose any action when it feels right.'}</p></div><div className="pet-history"><div><span className="eyebrow">LITTLE MOMENTS</span><span>RECENTLY</span></div>{pet.history.slice(0, 3).map((item, index) => <p key={`${item}-${index}`}><i />{item}</p>)}</div></div></div>
   </section>
 }
 
-function CreateMode({ navigate, actionFor, lastMovement }: { navigate: (page: Page) => void; actionFor: (movement: Movement) => Action | 'none'; lastMovement: MovementEvent | null }) {
+function CreateMode({ navigate, actionFor, lastMovement, adaptation }: { navigate: (page: Page) => void; actionFor: (movement: Movement) => Action | 'none'; lastMovement: MovementEvent | null; adaptation: WorkloadAdaptation }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const animationRef = useRef<number | null>(null)
   const [playing, setPlaying] = useState(true)
@@ -351,9 +357,148 @@ function CreateMode({ navigate, actionFor, lastMovement }: { navigate: (page: Pa
   }
   const clearCanvas = () => { setPlaying(false); const context = canvasRef.current?.getContext('2d'); if (context && canvasRef.current) context.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height) }
   const downloadArt = () => { const canvas = canvasRef.current; if (!canvas) return; const link = document.createElement('a'); link.download = `${name.trim() || 'neuroverse-art'}.png`; link.href = canvas.toDataURL('image/png'); link.click() }
-  return <section className="experience-page create-page"><div className="experience-toolbar"><button className="back-link" onClick={() => navigate('explore')}><ArrowLeft size={15} /> ALL WORLDS</button><span className="mode-label"><WandSparkles size={14} /> CREATE MODE</span><span className="canvas-live"><i /> CANVAS LIVE</span></div><div className="create-heading"><div><span className="eyebrow">YOUR MOVEMENTS, MADE VISIBLE</span><h1>MAKE SOMETHING<br /><span>UNIVERSE-SIZED.</span></h1></div><p>There’s no wrong move here. Follow a feeling and see where it takes you.</p></div>
+  return <section className="experience-page create-page"><div className="experience-toolbar"><button className="back-link" onClick={() => navigate('explore')}><ArrowLeft size={15} /> ALL WORLDS</button><span className="mode-label"><WandSparkles size={14} /> CREATE MODE</span><span className="canvas-live"><i /> CANVAS LIVE</span></div><div className="create-heading"><div><span className="eyebrow">YOUR MOVEMENTS, MADE VISIBLE</span><h1>MAKE SOMETHING<br /><span>UNIVERSE-SIZED.</span></h1></div><p>There’s no wrong move here. Follow a feeling and see where it takes you.</p></div><AdaptationNotice adaptation={adaptation} world="create" />
     <div className="studio"><div className="studio-canvas"><canvas ref={canvasRef} /><div className="canvas-overlay"><span>NEUROVERSE / GENERATIVE FIELD</span><span>01 — {String(pattern + 1).padStart(2, '0')}</span></div><div className="canvas-toolbar"><button onClick={() => setPlaying(!playing)}>{playing ? <span className="pause-icon">Ⅱ</span> : <Play size={14} />}{playing ? 'PAUSE' : 'PLAY'}</button><button onClick={() => { setBurst(Date.now()); setPattern((current) => current + 1) }}><Sparkles size={14} /> RANDOMIZE</button><button onClick={clearCanvas}><X size={14} /> CLEAR</button><button onClick={downloadArt}><Download size={14} /> EXPORT PNG</button></div><div className="canvas-response">MOVE TO MAKE <span>SPACE · PALETTE</span><i /> <span>A · FORM</span><i /> <span>S · BURST</span></div></div>
       <aside className="studio-aside"><div className="studio-aside-heading"><span className="eyebrow">ARTWORK SETTINGS</span><Settings2 size={15} /></div><label className="art-name-label">GIVE IT A NAME<input value={name} onChange={(event) => setName(event.target.value)} placeholder="Untitled universe" maxLength={34} /></label><div className="palette-control"><span>COLOR ENERGY</span><div>{palettes.map((colors, index) => <button className={palette === index ? 'palette-button palette-active' : 'palette-button'} key={index} onClick={() => setPalette(index)} aria-label={`Choose palette ${index + 1}`}><i style={{ background: colors[0] }} /><i style={{ background: colors[1] }} /><i style={{ background: colors[2] }} /></button>)}</div></div><button className="button button-primary save-art" onClick={saveArt}><Plus size={15} /> SAVE TO GALLERY</button><div className="gallery-heading"><span className="eyebrow">YOUR GALLERY</span><span>{String(gallery.length).padStart(2, '0')}</span></div><div className="gallery-list">{gallery.length === 0 ? <p className="gallery-empty">Your saved pieces will live here. Make something you love.</p> : gallery.slice(0, 3).map((item, index) => <button className="gallery-item" key={`${item.name}-${index}`} onClick={() => { const image = new Image(); image.onload = () => { const canvas = canvasRef.current; const context = canvas?.getContext('2d'); if (canvas && context) context.drawImage(image, 0, 0, canvas.width, canvas.height) }; image.src = item.image }}><img src={item.image} alt="" /><span><strong>{item.name}</strong><small>{item.date}</small></span><Download size={14} onClick={(event) => { event.stopPropagation(); const link = document.createElement('a'); link.href = item.image; link.download = `${item.name}.png`; link.click() }} /></button>)}</div></aside></div>
+  </section>
+}
+
+type RecordedSession = { subject: string; test: number; recorded_condition: 'low' | 'moderate' | 'high'; windows: number }
+type ModelStatus = { model_available: boolean; model_loaded: boolean; model_name: string | null; dataset_windows_available: boolean; evaluation: Record<string, { f1_macro: number }> | null }
+type ReplayResponse = { source: string; is_live: boolean; participant: string; test: number; recorded_condition: string; model_name: string; timeline: WorkloadPrediction[] }
+const ADAPT_API = 'http://127.0.0.1:8000'
+
+async function requestApi<T>(url: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(url, init)
+  if (!response.ok) {
+    let message = `NEURO-ADAPT service returned ${response.status}.`
+    try {
+      const body = await response.json() as { detail?: string }
+      if (body.detail) message = body.detail
+    } catch {
+      // Keep the useful HTTP status when the server does not return JSON.
+    }
+    throw new Error(message)
+  }
+  return await response.json() as T
+}
+
+function AdaptationNotice({ adaptation, world }: { adaptation: WorkloadAdaptation; world: 'story' | 'pet' | 'create' }) {
+  const tips = {
+    story: adaptation.difficulty === 'supportive' ? 'Optional hints are available. Take your time; the story will not skip ahead.' : adaptation.difficulty === 'challenging' ? 'Optional challenge: explore a different path on another run.' : 'Choices stay in your hands; the story keeps its original pace.',
+    pet: adaptation.difficulty === 'supportive' ? 'One small interaction is enough. There is no timer.' : adaptation.difficulty === 'challenging' ? 'Optional challenge: try a new interaction combination.' : 'Follow your companion’s cues at your own pace.',
+    create: adaptation.difficulty === 'supportive' ? 'Try one palette or pattern at a time; all creative controls remain available.' : adaptation.difficulty === 'challenging' ? 'Optional idea: combine a new palette, form, and burst.' : 'Your palette and pattern controls are always yours.',
+  }
+  return <div className={`adapt-notice adapt-${adaptation.difficulty}`}><div><span className="eyebrow">NEURO-ADAPT · {adaptation.difficulty.toUpperCase()}</span><p>{tips[world]}</p></div><span>{adaptation.accepted_class ? `${adaptation.accepted_class.toUpperCase()} WORKLOAD` : 'RECORDED DEMO NOT RUN'}</span></div>
+}
+
+function NeuroAdaptDashboard({ onAdaptation }: { onAdaptation: (adaptation: WorkloadAdaptation) => void }) {
+  const [status, setStatus] = useState<ModelStatus | null>(null)
+  const [sessions, setSessions] = useState<RecordedSession[]>([])
+  const [selection, setSelection] = useState('')
+  const [timeline, setTimeline] = useState<WorkloadPrediction[]>([])
+  const [replayInfo, setReplayInfo] = useState<ReplayResponse | null>(null)
+  const [playIndex, setPlayIndex] = useState(0)
+  const [playing, setPlaying] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [serviceReady, setServiceReady] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    const loadStatus = async () => {
+      try {
+        const model = await requestApi<ModelStatus>(`${ADAPT_API}/api/model/status`)
+        if (cancelled) return
+        setStatus(model)
+        setServiceReady(true)
+        if (model.dataset_windows_available) {
+          const result = await requestApi<{ sessions: RecordedSession[] }>(`${ADAPT_API}/api/workload/sessions`)
+          if (cancelled) return
+          setSessions(result.sessions)
+          if (result.sessions.length) {
+            const first = result.sessions[0]
+            setSelection(`${first.subject}|${first.test}`)
+          }
+        }
+      } catch (reason) {
+        if (!cancelled) setError(reason instanceof Error ? reason.message : 'Could not connect to the local workload service.')
+      }
+    }
+    void loadStatus()
+    return () => { cancelled = true }
+  }, [])
+
+  useEffect(() => {
+    if (!playing || !timeline.length) return
+    const timer = window.setTimeout(() => {
+      if (playIndex + 1 >= timeline.length) setPlaying(false)
+      else setPlayIndex(playIndex + 1)
+    }, 500)
+    return () => window.clearTimeout(timer)
+  }, [playing, playIndex, timeline.length])
+
+  useEffect(() => {
+    const current = timeline[playIndex]
+    if (current) onAdaptation(current.adaptation)
+  }, [timeline, playIndex, onAdaptation])
+
+  const replay = async () => {
+    const [subject, test] = selection.split('|')
+    if (!subject || !test) return
+    setLoading(true)
+    setError('')
+    setPlaying(false)
+    setTimeline([])
+    try {
+      const result = await requestApi<ReplayResponse>(`${ADAPT_API}/api/workload/replay`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subject, test: Number(test) }),
+      })
+      if (result.is_live || result.source !== 'recorded_eeg_demo') {
+        throw new Error('The service returned an unexpected input source; recorded replay was stopped.')
+      }
+      setReplayInfo(result)
+      setTimeline(result.timeline)
+      setPlayIndex(0)
+      setPlaying(result.timeline.length > 1)
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Recorded EEG replay failed.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const current = timeline[playIndex]
+  const selectedModelF1 = status?.model_name && status.evaluation?.[status.model_name]
+    ? status.evaluation[status.model_name].f1_macro
+    : null
+  const selectedSession = sessions.find((session) => `${session.subject}|${session.test}` === selection)
+
+  return <section className="subpage adapt-page">
+    <div className="page-heading adapt-heading"><span className="eyebrow">NEURO-ADAPT / RECORDED EEG DEMO</span><h1>MAKE ROOM<br /><span>TO THINK.</span></h1><p>Explore how a workload model can tune the experience—using recorded EEG task windows, never a live reading of you.</p></div>
+    <div className="recorded-warning"><Radio size={17} /><div><strong>RECORDED DATA · NOT LIVE EEG</strong><p>Predictions replay a participant’s archived N-back session. They are not measurements of the current user, and the task-condition labels are not a diagnosis or direct readout of mental state.</p></div><span>NO HEADSET CONNECTED</span></div>
+    <div className="adapt-status-grid">
+      <div className="adapt-status-card"><span className="eyebrow">MODEL STATUS</span><strong className={status?.model_available ? 'status-ready' : ''}><i />{status?.model_available ? status.model_name?.replaceAll('_', ' ') : 'Model not trained'}</strong><small>{selectedModelF1 === null ? 'Participant-grouped evaluation unavailable' : `5-fold participant-held-out macro F1 · ${(selectedModelF1 * 100).toFixed(1)}%`}</small></div>
+      <div className="adapt-status-card"><span className="eyebrow">CURRENT PREDICTION</span><strong className={current ? `workload-${current.workload_class}` : ''}>{current ? current.workload_class.toUpperCase() : '—'}</strong><small>{current ? `${(current.confidence * 100).toFixed(1)}% confidence · ${current.window_start}` : 'Start a recorded session to see model output'}</small></div>
+      <div className="adapt-status-card"><span className="eyebrow">EXPERIENCE PACE</span><strong className={`difficulty-${current?.adaptation.difficulty ?? 'balanced'}`}>{current?.adaptation.difficulty ?? 'balanced'}</strong><small>{current?.adaptation.last_adaptation ?? 'Waiting for consistent predictions'}</small></div>
+    </div>
+    <div className="replay-workspace">
+      <div className="replay-panel">
+        <div className="panel-title"><span className="eyebrow">01 / CHOOSE A RECORDING</span><span>{serviceReady ? 'LOCAL MODEL SERVICE READY' : 'LOCAL MODEL SERVICE OFFLINE'}</span></div>
+        <div className="replay-controls"><label>PARTICIPANT & TASK<select value={selection} onChange={(event) => setSelection(event.target.value)} disabled={!sessions.length}><option value="">Select a recorded session</option>{sessions.map((item) => <option key={`${item.subject}-${item.test}`} value={`${item.subject}|${item.test}`}>{item.subject} · Task {item.test} · {item.recorded_condition} · {item.windows} windows</option>)}</select></label><button className="button button-primary" onClick={replay} disabled={loading || !status?.model_available || !selectedSession}>{loading ? 'LOADING MODEL…' : <><Play size={14} /> PLAY RECORDED EEG</>}</button></div>
+        {!serviceReady && <p className="backend-help">Start the local backend with <code>python -m uvicorn ml.api:app --reload --port 8000</code>. No prediction is shown until the service and trained model are available.</p>}
+        {error && <p className="backend-error" role="alert">{error}</p>}
+        <div className="timeline-heading"><span className="eyebrow">02 / PREDICTED WORKLOAD TIMELINE</span><span>{timeline.length ? `${playIndex + 1} / ${timeline.length} · 10-SECOND WINDOWS` : 'NO REPLAY LOADED'}</span></div>
+        <div className="workload-chart" aria-label="Recorded workload prediction timeline">{timeline.map((item, index) => <span key={`${item.window_start}-${index}`} className={`chart-bar workload-${item.workload_class} ${index === playIndex ? 'chart-current' : ''}`} style={{ height: `${Math.max(14, Math.round(item.confidence * 84))}px` }} title={`${item.window_start} · ${item.workload_class} · ${(item.confidence * 100).toFixed(1)}%`} />)}</div>
+        <div className="chart-legend"><span><i className="workload-low" />LOW</span><span><i className="workload-moderate" />MODERATE</span><span><i className="workload-high" />HIGH</span>{timeline.length > 0 && <button onClick={() => setPlaying(!playing)}>{playing ? 'PAUSE REPLAY' : playIndex >= timeline.length - 1 ? 'REPLAY AGAIN' : 'RESUME'}</button>}</div>
+        {timeline.length > 0 && !playing && playIndex >= timeline.length - 1 && <div className="replay-complete"><Check size={14} /> Replay complete. The model processed {timeline.length} recorded windows from {replayInfo?.participant}, task {replayInfo?.test} ({replayInfo?.recorded_condition} task condition).</div>}
+      </div>
+      <aside className="adaptation-panel"><span className="eyebrow">03 / NEURO-ADAPT RESPONSE</span><div className="adaptation-orb"><Sparkles size={23} /></div><h2>{current?.adaptation.difficulty ?? 'balanced'} pace</h2><p>{current?.adaptation.last_adaptation ?? 'The experience stays balanced until the model has made several consistent, confident predictions.'}</p><div className="consistency-row"><span>CONFIDENT CONSISTENCY</span><strong>{Math.min(3, current?.adaptation.consistent_predictions ?? 0)} / 3</strong></div><div className="consistency-track"><i style={{ width: `${Math.min(100, (current?.adaptation.consistent_predictions ?? 0) / 3 * 100)}%` }} /></div><div className="adaptation-detail"><span>Hints</span><strong>{current?.adaptation.hint_available ? 'Available' : 'Optional'}</strong></div><div className="adaptation-detail"><span>Time pressure</span><strong>{current?.adaptation.time_pressure === 'reduced' ? 'Reduced' : 'Unchanged'}</strong></div><small>Changes are gradual and suggestions only. Your choices and creative controls remain available.</small></aside>
+    </div>
+    {current && <div className="probability-row"><span className="eyebrow">MODEL PROBABILITIES · {current.workload_class.toUpperCase()} PREDICTED</span>{(['low', 'moderate', 'high'] as const).map((label) => <div key={label}><span>{label}</span><div><i className={`workload-${label}`} style={{ width: `${current.probabilities[label] * 100}%` }} /></div><strong>{(current.probabilities[label] * 100).toFixed(0)}%</strong></div>)}</div>}
+    <p className="adapt-footnote">Classes are experimental N-back task conditions: position 1-back (low), arithmetic 1-back (moderate), and dual arithmetic 2-back (high). The model is trained on Emotiv EPOC X features and is not validated for ANT Neuro hardware.</p>
   </section>
 }
 
