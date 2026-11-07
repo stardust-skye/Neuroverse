@@ -48,6 +48,7 @@ export default function WebcamInput({ onMovement, onStatus, onGaze, compact = fa
   const landmarkerRef = useRef<{ detectForVideo: (video: HTMLVideoElement, timestamp: number) => { faceLandmarks?: Landmark[][] }; close: () => void } | null>(null)
   const frameRef = useRef<number | null>(null)
   const lastTriggerRef = useRef(0)
+  const lastDetectionAtRef = useRef(0)
   const winkStartRef = useRef<{ side: 'left' | 'right'; at: number } | null>(null)
   const winkSentRef = useRef(false)
   const [active, setActive] = useState(false)
@@ -87,7 +88,7 @@ export default function WebcamInput({ onMovement, onStatus, onGaze, compact = fa
       await videoRef.current.play()
       setStatus('Loading facial movement model…')
       const { FaceLandmarker, FilesetResolver } = await import('@mediapipe/tasks-vision')
-      const vision = await FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/wasm')
+      const vision = await FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm')
       const options = {
         baseOptions: { modelAssetPath: MODEL_URL },
         runningMode: 'VIDEO',
@@ -108,7 +109,13 @@ export default function WebcamInput({ onMovement, onStatus, onGaze, compact = fa
           frameRef.current = requestAnimationFrame(detect)
           return
         }
-        const landmarks = landmarker.detectForVideo(video, performance.now()).faceLandmarks?.[0]
+        const detectionTime = performance.now()
+        if (detectionTime - lastDetectionAtRef.current < 33) {
+          frameRef.current = requestAnimationFrame(detect)
+          return
+        }
+        lastDetectionAtRef.current = detectionTime
+        const landmarks = landmarker.detectForVideo(video, detectionTime).faceLandmarks?.[0]
         if (landmarks) {
           onGaze?.(estimateGaze(landmarks))
           const left = eyeAspectRatio(landmarks, [362, 385, 387, 263, 373, 380])
@@ -117,11 +124,12 @@ export default function WebcamInput({ onMovement, onStatus, onGaze, compact = fa
           let movement: MovementEvent['movement'] | null = null
           const leftClosed = left < 0.19
           const rightClosed = right < 0.19
+          const oneEyeWink = (leftClosed && right > 0.23) || (rightClosed && left > 0.23)
           if (leftClosed && rightClosed) {
             winkStartRef.current = null
             winkSentRef.current = false
             movement = 'BLINK'
-          } else if (leftClosed !== rightClosed) {
+          } else if (oneEyeWink && compact) {
             const side = leftClosed ? 'left' : 'right'
             if (winkStartRef.current?.side !== side) {
               winkStartRef.current = { side, at: now }
@@ -133,9 +141,12 @@ export default function WebcamInput({ onMovement, onStatus, onGaze, compact = fa
           } else {
             winkStartRef.current = null
             winkSentRef.current = false
-            const mouthGap = Math.abs(landmarks[13].y - landmarks[14].y)
-            const faceHeight = Math.abs(landmarks[10].y - landmarks[152].y)
-            if (faceHeight > 0 && mouthGap / faceHeight > 0.055) movement = 'JAW_CLENCH'
+            if (oneEyeWink) movement = 'WINK'
+            else {
+              const mouthGap = Math.abs(landmarks[13].y - landmarks[14].y)
+              const faceHeight = Math.abs(landmarks[10].y - landmarks[152].y)
+              if (faceHeight > 0 && mouthGap / faceHeight > 0.055) movement = 'JAW_CLENCH'
+            }
           }
           if (movement && now - lastTriggerRef.current > 900) {
             lastTriggerRef.current = now

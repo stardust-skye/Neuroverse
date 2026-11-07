@@ -27,7 +27,7 @@ const defaultMapping: Record<Movement, Action | 'none'> = {
   BLINK: 'confirm', WINK: 'switch', JAW_CLENCH: 'special', REST: 'none', UNKNOWN: 'none',
 }
 const ART_COLORS = [
-  '#ffffff', '#111318', '#ff4057', '#ff8b38', '#ffd447', '#72da69',
+  '#ffffff', '#000000', '#ff4057', '#ff8b38', '#ffd447', '#72da69',
   '#39e4d1', '#43a5ff', '#9366ff', '#ff62bd', '#a8f0df', '#c4a0ff',
   '#f3a5a0', '#bad8ff', '#d2f477',
 ]
@@ -447,6 +447,7 @@ function CreateMode({ navigate, actionFor, lastMovement, onMovement, adaptation,
   const [calibrationIndex, setCalibrationIndex] = useState<number | null>(null)
   const [calibrationCapture, setCalibrationCapture] = useState(false)
   const [calibrationHint, setCalibrationHint] = useState('')
+  const calibrationOpenRef = useRef(false)
 
   const calibrationTargets = [
     { x: 0.5, y: 0.5, label: 'CENTER' },
@@ -461,6 +462,7 @@ function CreateMode({ navigate, actionFor, lastMovement, onMovement, adaptation,
   colorRef.current = color
   sizeRef.current = brushSize
   cameraActiveRef.current = cameraActive
+  calibrationOpenRef.current = calibrationIndex !== null
 
   const cloneCanvas = () => {
     const canvas = canvasRef.current
@@ -522,6 +524,13 @@ function CreateMode({ navigate, actionFor, lastMovement, onMovement, adaptation,
     return () => observer.disconnect()
   }, [])
 
+  useEffect(() => {
+    const cursor = cursorRef.current
+    if (!cursor) return
+    cursor.style.setProperty('--brush-color', color)
+    cursor.style.setProperty('--brush-diameter', `${Math.max(8, Math.min(42, brushSize))}px`)
+  }, [color, brushSize])
+
   const showCursor = (point: StudioPoint, source: 'gaze' | 'pointer') => {
     const cursor = cursorRef.current
     if (cursor) {
@@ -538,10 +547,16 @@ function CreateMode({ navigate, actionFor, lastMovement, onMovement, adaptation,
     if (!raw) {
       previousGazeRef.current = null
       smoothedCursorRef.current = null
+      const wasDrawing = drawingRef.current
+      if (wasDrawing) {
+        drawingRef.current = false
+        setPainting(false)
+        setMessage('Gaze lost · painting paused for safety')
+      }
       if (faceDetectedRef.current) {
         faceDetectedRef.current = false
         setFaceDetected(false)
-        setMessage('Face not detected · adjust your position or lighting')
+        setMessage(wasDrawing ? 'Gaze lost · painting paused for safety' : 'Face not detected · adjust your position or lighting')
       }
       cursorRef.current?.classList.remove('is-visible', 'cursor-gaze')
       setCursorSource(null)
@@ -570,7 +585,9 @@ function CreateMode({ navigate, actionFor, lastMovement, onMovement, adaptation,
     smoothedCursorRef.current = smooth
     showCursor(smooth, 'gaze')
     const inside = screenX >= rect.left && screenX <= rect.right && screenY >= rect.top && screenY <= rect.bottom
-    if (drawingRef.current && inside) {
+    const hit = inside ? document.elementFromPoint(screenX, screenY) : null
+    const overControls = Boolean(hit?.closest('.studio-topbar, .studio-gaze-tools, .studio-bottom-dock, .studio-message, .studio-gallery-popover, .studio-popover, .gaze-calibration'))
+    if (drawingRef.current && inside && !overControls) {
       const from = previousGazeRef.current ?? smooth
       const context = canvas.getContext('2d')
       if (context) drawBrushSegment(context, from, smooth, colorRef.current, sizeRef.current, brushRef.current)
@@ -597,14 +614,17 @@ function CreateMode({ navigate, actionFor, lastMovement, onMovement, adaptation,
   }, [])
 
   const setDrawMode = (enabled: boolean) => {
+    if (enabled && calibrationOpenRef.current) return
     if (enabled === drawingRef.current) return
     if (enabled) {
       snapshot()
       previousGazeRef.current = null
-      setMessage('GAZE PAINT active · press G, Escape, or PAUSE to stop')
+      setMessage(cameraActiveRef.current && gazeMapRef.current
+        ? 'GAZE PAINT active · press G, Escape, or PAUSE to stop'
+        : 'Mouse paint active · press G, Escape, or PAUSE to stop')
     } else {
       previousGazeRef.current = null
-      setMessage('Gaze cursor only · drawing paused')
+      setMessage(cameraActiveRef.current && gazeMapRef.current ? 'Gaze cursor only · drawing paused' : 'Mouse paint paused')
     }
     drawingRef.current = enabled
     setPainting(enabled)
@@ -618,13 +638,13 @@ function CreateMode({ navigate, actionFor, lastMovement, onMovement, adaptation,
       setDrawMode(!drawingRef.current)
       return
     }
-    if (lastMovement.movement === 'BLINK' && action === 'confirm') {
+    if (lastMovement.movement === 'BLINK' && lastMovement.source !== 'webcam' && action === 'confirm') {
       const next = ART_COLORS[(ART_COLORS.indexOf(colorRef.current) + 1) % ART_COLORS.length]
       setColor(next)
       setMessage('Color changed · a blink never starts drawing')
       return
     }
-    if (lastMovement.movement === 'JAW_CLENCH' && action === 'special') {
+    if (lastMovement.movement === 'JAW_CLENCH' && lastMovement.source !== 'webcam' && action === 'special') {
       const next = BRUSHES[(BRUSHES.indexOf(brushRef.current) + 1) % BRUSHES.length]
       setBrush(next)
       setMessage(`${next.toUpperCase()} brush selected`)
@@ -634,10 +654,20 @@ function CreateMode({ navigate, actionFor, lastMovement, onMovement, adaptation,
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const target = event.target
-      if (target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))) return
+      if (target instanceof HTMLElement && (
+        target.isContentEditable
+        || ['TEXTAREA', 'SELECT'].includes(target.tagName)
+        || target instanceof HTMLInputElement && target.type !== 'range'
+      )) return
       if (event.key.toLowerCase() === 'g') {
         event.preventDefault()
         setDrawMode(!drawingRef.current)
+      } else if (event.key === 'Escape' && calibrationOpenRef.current) {
+        event.preventDefault()
+        captureRef.current = false
+        if (calibrationTimerRef.current !== null) window.clearTimeout(calibrationTimerRef.current)
+        setCalibrationIndex(null)
+        setCalibrationCapture(false)
       } else if (event.key === 'Escape' && drawingRef.current) {
         event.preventDefault()
         setDrawMode(false)
@@ -677,6 +707,7 @@ function CreateMode({ navigate, actionFor, lastMovement, onMovement, adaptation,
 
   const clearCanvas = () => {
     if (!window.confirm('Clear the canvas? This can be undone.')) return
+    setDrawMode(false)
     snapshot()
     const canvas = canvasRef.current
     const context = canvas?.getContext('2d')
@@ -733,6 +764,7 @@ function CreateMode({ navigate, actionFor, lastMovement, onMovement, adaptation,
       setMessage('Enable the webcam before starting gaze calibration')
       return
     }
+    setDrawMode(false)
     calibrationDataRef.current = []
     setCalibrationHint('Look at the target, then capture each point')
     setCalibrationCapture(false)
@@ -794,14 +826,18 @@ function CreateMode({ navigate, actionFor, lastMovement, onMovement, adaptation,
       onPointerMove={pointerMove}
       onPointerUp={pointerUp}
       onPointerCancel={pointerUp}
-      onPointerLeave={() => { if (!pointerDrawingRef.current && cursorSource === 'pointer') setCursorSource(null) }}
+      onPointerLeave={() => {
+        if (!pointerDrawingRef.current && cursorSource === 'pointer') {
+          cursorRef.current?.classList.remove('is-visible', 'cursor-pointer')
+          setCursorSource(null)
+        }
+      }}
     />
     <div className="studio-topbar">
       <button className="studio-back" onClick={() => navigate('explore')} aria-label="Back to worlds"><ArrowLeft size={17} /><span>WORLDS</span></button>
       <label className="studio-name"><ImageIcon size={14} /><input value={name} onChange={(event) => setName(event.target.value)} placeholder="Name this artwork" maxLength={34} aria-label="Artwork name" /></label>
       <span className={cameraActive ? 'studio-signal signal-active' : 'studio-signal'}><i />{cameraActive ? faceDetected ? gazeMap ? 'GAZE CALIBRATED' : 'FACE DETECTED · CALIBRATE' : 'CAMERA ON · FINDING FACE' : 'GAZE OFF'}</span>
       <button className="studio-icon-button" onClick={redo} aria-label="Redo" title="Redo"><Redo2 size={16} /></button>
-      <button className="studio-icon-button" onClick={beginCalibration} disabled={!cameraActive} aria-label="Calibrate gaze" title="Calibrate gaze"><Crosshair size={16} /></button>
       <button className={openPanel === 'gallery' ? 'studio-icon-button selected' : 'studio-icon-button'} onClick={() => setOpenPanel(openPanel === 'gallery' ? null : 'gallery')} aria-label="Open saved gallery" title="Gallery"><Images size={16} /></button>
     </div>
     <div className="studio-gaze-tools">
@@ -834,15 +870,15 @@ function CreateMode({ navigate, actionFor, lastMovement, onMovement, adaptation,
         </div>
         <label className="studio-size"><span>SIZE <b>{brushSize}</b></span><input type="range" min="2" max="40" value={brushSize} onChange={(event) => setBrushSize(Number(event.target.value))} aria-label="Brush size" /></label>
         <button className={painting ? 'studio-control draw-control is-drawing' : 'studio-control draw-control'} onClick={() => setDrawMode(!painting)} aria-pressed={painting} title="G toggles paint; Escape pauses">
-          {painting ? <Pause size={17} /> : <Play size={17} />}<span>{painting ? 'PAUSE' : 'DRAW'}</span><small>{painting ? 'GAZE PAINT' : 'GAZE CURSOR'}</small>
+          {painting ? <Pause size={17} /> : <Play size={17} />}<span>{painting ? 'PAUSE' : 'DRAW'}</span><small>{cameraActive && gazeMap ? painting ? 'GAZE PAINT' : 'GAZE CURSOR' : painting ? 'MOUSE PAINT' : 'MOUSE READY'}</small>
         </button>
         <button className="studio-control" onClick={undo} title="Undo"><Undo2 size={17} /><span>UNDO</span></button>
         <button className="studio-control" onClick={clearCanvas} title="Clear canvas"><Trash2 size={17} /><span>CLEAR</span></button>
         <button className="studio-control save-control" onClick={saveArt} title="Save PNG and add to gallery"><Save size={17} /><span>SAVE</span></button>
       </div>
-      <div className="studio-adapt-note"><Sparkles size={12} /> NEURO-ADAPT {adaptation.difficulty.toUpperCase()} · EEG CURSOR NOT CONNECTED <span>G · DRAW/PAUSE&nbsp;&nbsp; ESC · PAUSE</span></div>
+      <div className="studio-adapt-note"><Sparkles size={12} /> NEURO-ADAPT {adaptation.difficulty.toUpperCase()} · {adaptation.difficulty === 'supportive' ? 'Try one brush at a time' : adaptation.difficulty === 'challenging' ? 'Try a new brush and color' : 'Your tools stay yours'} · EEG CURSOR NOT CONNECTED <span>G · DRAW/PAUSE&nbsp;&nbsp; ESC · PAUSE&nbsp;&nbsp; A/WINK · DRAW&nbsp;&nbsp; SPACE · COLOR&nbsp;&nbsp; S · BRUSH</span></div>
     </div>
-    <div className="studio-message" role="status">{message || (gazeMap ? 'Gaze cursor only · drawing requires an intentional action' : 'Enable webcam and calibrate for gaze · draw with mouse or keyboard anytime')}</div>
+    <div className="studio-message" role="status">{message || (gazeMap ? 'Gaze cursor only · drawing requires an intentional action' : 'Enable gaze for eye control · mouse draws when DRAW is active')}</div>
     {openPanel === 'gallery' && <div className="studio-gallery-popover">
       <div className="popover-heading"><span>YOUR GALLERY</span><button onClick={() => setOpenPanel(null)} aria-label="Close gallery"><X size={14} /></button></div>
       {gallery.length === 0 ? <p>No saved artwork yet.</p> : gallery.map((item, index) => <button key={`${item.name}-${index}`} className="gallery-saved-item" onClick={() => loadArt(item)}><img src={item.image} alt="" /><span><strong>{item.name}</strong><small>{item.date}</small></span><Download size={14} onClick={(event) => { event.stopPropagation(); downloadImage(item.image, `${item.name}.png`) }} /></button>)}

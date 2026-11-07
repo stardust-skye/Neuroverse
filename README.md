@@ -1,6 +1,6 @@
 # Neuroverse
 
-Neuroverse is a local-first interactive entertainment demo. Explore a branching story, care for a digital moon sprite, or make generative artwork using keyboard input or optional webcam-based facial landmarks.
+Neuroverse is a local-first interactive entertainment demo. Explore a branching story, care for a digital moon sprite, or paint in a full-screen studio with mouse, keyboard, and optional webcam-based gaze estimation.
 
 ## Run locally
 
@@ -32,7 +32,7 @@ Keyboard simulation is always available:
 
 Keyboard shortcuts are ignored while typing in an input, textarea, or select. Controls work in each experience and can also be tested in the setup screen or developer panel (`Ctrl+Shift+D`). Movement-to-action mappings can be changed on the setup screen and are saved in local storage.
 
-Webcam mode is optional. Select it in setup and explicitly enable the camera; grant browser permission when prompted. The face-landmark task and WASM runtime are fetched from their published hosting URLs, so webcam mode needs an internet connection the first time it loads. Camera frames are processed in the browser, are not recorded, and are not sent to an application backend. Eye-closure detection is experimental. Jaw clench is approximated using mouth landmarks and is not a reliable measurement of muscle contraction. Keyboard simulation remains available if camera access or model loading fails.
+Webcam mode is optional. Select it in setup and explicitly enable the camera; grant browser permission when prompted. The face-landmark task and WASM runtime are fetched from their published hosting URLs, so webcam mode needs an internet connection the first time it loads. Camera frames are processed in the browser, are not recorded, and are not sent to an application backend. Eye-closure detection is experimental; Create Mode requires a sustained one-eye closure for its wink gesture, and ordinary bilateral blinks are ignored for drawing. Gaze estimation can be affected by lighting, camera placement, face position, and individual eye geometry. Jaw clench is approximated using mouth landmarks and is not a reliable measurement of muscle contraction. Keyboard and mouse controls remain available if camera access or model loading fails.
 
 EEG mode is explicitly marked as coming soon. The project does not claim or simulate an EEG hardware connection.
 
@@ -40,8 +40,10 @@ EEG mode is explicitly marked as coming soon. The project does not claim or simu
 
 - **The Last Signal:** A playable branching story with multiple endings.
 - **Miso:** A pet with needs, levels, reactions, and a locally saved interaction history.
-- **Generative studio:** A continuously animated canvas with palette and pattern controls, PNG export, and a local gallery.
+- **Create Mode:** A full-screen canvas with five distinct brushes, color palette, brush sizing, undo/redo, clear confirmation, high-resolution PNG export, and a locally saved gallery.
 - Pet progress, artwork, and input mappings are stored in the browser's local storage.
+
+In Create Mode, select **Enable Gaze** to request camera permission. The browser downloads the existing MediaPipe Face Landmarker assets, estimates eye direction locally, and asks for a five-point calibration before showing a gaze cursor. This is approximate webcam gaze estimation, not precise eye tracking. Looking moves the cursor only; use **DRAW**, `G`, or a deliberate wink to enter paint mode. `Escape` pauses immediately. Ordinary blinks never start drawing. `Space` changes color and `S` cycles brushes; these movement mappings do not change Story Mode or Pet Mode. Mouse drawing is also available after enabling paint mode.
 
 ## Future EEG integration
 
