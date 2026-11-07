@@ -36,7 +36,7 @@ export interface WorkloadAdaptation {
 export interface WorkloadPrediction {
   window_start: string
   workload_class: 'low' | 'moderate' | 'high'
-  confidence: number
+  model_score: number
   probabilities: Record<'low' | 'moderate' | 'high', number>
   adaptation: WorkloadAdaptation
 }

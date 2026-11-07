@@ -4,7 +4,7 @@ from ml.adaptation import AdaptiveEngine
 
 
 class AdaptiveEngineTests(unittest.TestCase):
-    def test_requires_consistent_confident_predictions(self):
+    def test_requires_consistent_high_scoring_predictions(self):
         engine = AdaptiveEngine(consistent_count=3, cooldown_seconds=0)
         self.assertEqual(engine.update("high", 0.9, 0).difficulty, "balanced")
         self.assertEqual(engine.update("high", 0.9, 10).difficulty, "balanced")
@@ -13,7 +13,7 @@ class AdaptiveEngineTests(unittest.TestCase):
         self.assertTrue(changed.hint_available)
         self.assertEqual(changed.time_pressure, "reduced")
 
-    def test_low_confidence_resets_streak(self):
+    def test_low_score_resets_streak(self):
         engine = AdaptiveEngine(consistent_count=2, cooldown_seconds=0)
         engine.update("low", 0.9, 0)
         state = engine.update("low", 0.4, 1)

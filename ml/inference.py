@@ -50,6 +50,6 @@ def predict_features(features: dict[str, float], bundle: dict[str, Any] | None =
     predicted = max(mapped, key=mapped.get)
     return {
         "workload_class": predicted,
-        "confidence": mapped[predicted],
+        "model_score": mapped[predicted],
         "probabilities": mapped,
     }

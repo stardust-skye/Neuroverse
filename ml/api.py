@@ -91,7 +91,7 @@ def list_recorded_sessions() -> dict:
                 "subject": str(row.subject),
                 "test": int(row.test),
                 "recorded_condition": str(row.workload_class),
-                "windows": int(row["size"]),
+                "windows": int(row.size),
             }
             for row in sessions.itertuples(index=False)
         ]
@@ -129,20 +129,19 @@ def replay(request: ReplayRequest) -> dict:
     codes = bundle["model"].classes_
     engine = AdaptiveEngine()
     timeline = []
-    start = pd.Timestamp(selected["window_start"].iloc[0])
     for index, row in enumerate(selected.itertuples(index=False)):
         probability_map = {
             CLASS_NAMES[int(code) - 1]: float(probability)
             for code, probability in zip(codes, probabilities[index], strict=True)
         }
         prediction = max(probability_map, key=probability_map.get)
-        confidence = probability_map[prediction]
-        adaptation = engine.update(prediction, confidence, index * int(row.window_seconds))
+        model_score = probability_map[prediction]
+        adaptation = engine.update(prediction, model_score, index * int(row.window_seconds))
         timeline.append(
             {
                 "window_start": pd.Timestamp(row.window_start).isoformat(),
                 "workload_class": prediction,
-                "confidence": confidence,
+                "model_score": model_score,
                 "probabilities": probability_map,
                 "adaptation": adaptation.as_dict(),
             }

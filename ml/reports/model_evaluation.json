@@ -5,13 +5,13 @@
     "2": "moderate",
     "3": "high"
   },
-  "label_caveat": "Classes are task-condition labels from the dataset documentation, not direct measurements of an individual's internal workload.",
+  "label_caveat": "Classes are task-condition labels from the dataset documentation, not direct measurements of an individual's internal workload. Phase 2 is presumed to be the active task interval based on timing; the included README does not define the numeric phase codes.",
   "participants": 16,
-  "windows": 6091,
+  "windows": 6063,
   "class_counts": {
-    "low": 2005,
-    "moderate": 2027,
-    "high": 2059
+    "low": 1996,
+    "moderate": 2017,
+    "high": 2050
   },
   "feature_count": 140,
   "window_seconds": 10,
@@ -20,292 +20,208 @@
   "scikit_learn_version": "1.8.0",
   "models": {
     "logistic_regression": {
-      "accuracy": 0.43638154654408146,
-      "precision_macro": 0.424168895156863,
-      "recall_macro": 0.4377355648821193,
-      "f1_macro": 0.4296916395656984,
+      "accuracy": 0.43410852713178294,
+      "precision_macro": 0.4213687521879473,
+      "recall_macro": 0.4354846742390223,
+      "f1_macro": 0.42652670837144413,
       "confusion_matrix": [
         [
-          1381,
-          306,
-          318
+          1349,
+          297,
+          350
         ],
         [
-          558,
-          551,
-          918
+          533,
+          595,
+          889
         ],
         [
-          353,
-          980,
-          726
+          470,
+          892,
+          688
         ]
       ],
       "per_class": {
         "low": {
-          "precision": 0.6025305410122164,
-          "recall": 0.6887780548628429,
-          "f1": 0.6427740283919013,
-          "support": 2005
+          "precision": 0.5735544217687075,
+          "recall": 0.6758517034068137,
+          "f1": 0.6205151793928243,
+          "support": 1996
         },
         "moderate": {
-          "precision": 0.29994556341861733,
-          "recall": 0.2718302910705476,
-          "f1": 0.2851966873706004,
-          "support": 2027
+          "precision": 0.3335201793721973,
+          "recall": 0.2949925632126921,
+          "f1": 0.31307550644567217,
+          "support": 2017
         },
         "high": {
-          "precision": 0.37003058103975534,
-          "recall": 0.35259834871296747,
-          "f1": 0.3611042029345934,
-          "support": 2059
+          "precision": 0.3570316554229372,
+          "recall": 0.335609756097561,
+          "f1": 0.34598943927583603,
+          "support": 2050
         }
       },
-      "participant_folds": [
-        [
-          "subject_02",
-          "subject_05",
-          "subject_06"
-        ],
-        [
-          "subject_03",
-          "subject_11",
-          "subject_13"
-        ],
-        [
-          "subject_01",
-          "subject_09",
-          "subject_14"
-        ],
-        [
-          "subject_04",
-          "subject_10",
-          "subject_12"
-        ],
-        [
-          "subject_07",
-          "subject_08",
-          "subject_15",
-          "subject_16"
-        ]
+      "test_participant_counts_per_fold": [
+        4,
+        3,
+        3,
+        3,
+        3
       ]
     },
     "random_forest": {
-      "accuracy": 0.465604990970284,
-      "precision_macro": 0.44446438820676565,
-      "recall_macro": 0.4669032204709656,
-      "f1_macro": 0.4497822384723685,
+      "accuracy": 0.4672604321293089,
+      "precision_macro": 0.44587208935394335,
+      "recall_macro": 0.4684637254403281,
+      "f1_macro": 0.45244078028726564,
       "confusion_matrix": [
         [
-          1492,
-          230,
-          283
+          1478,
+          261,
+          257
         ],
         [
-          564,
-          499,
-          964
+          589,
+          493,
+          935
         ],
         [
-          494,
-          720,
-          845
+          431,
+          757,
+          862
         ]
       ],
       "per_class": {
         "low": {
-          "precision": 0.5850980392156863,
-          "recall": 0.744139650872818,
-          "f1": 0.6551042810098793,
-          "support": 2005
+          "precision": 0.5916733386709367,
+          "recall": 0.7404809619238477,
+          "f1": 0.6577659101023587,
+          "support": 1996
         },
         "moderate": {
-          "precision": 0.3443754313319531,
-          "recall": 0.24617661568820917,
-          "f1": 0.28711162255466055,
-          "support": 2027
+          "precision": 0.32627399073461283,
+          "recall": 0.24442240951908775,
+          "f1": 0.27947845804988664,
+          "support": 2017
         },
         "high": {
-          "precision": 0.40391969407265776,
-          "recall": 0.4103933948518698,
-          "f1": 0.40713081185256567,
-          "support": 2059
+          "precision": 0.4196689386562804,
+          "recall": 0.42048780487804877,
+          "f1": 0.42007797270955166,
+          "support": 2050
         }
       },
-      "participant_folds": [
-        [
-          "subject_02",
-          "subject_05",
-          "subject_06"
-        ],
-        [
-          "subject_03",
-          "subject_11",
-          "subject_13"
-        ],
-        [
-          "subject_01",
-          "subject_09",
-          "subject_14"
-        ],
-        [
-          "subject_04",
-          "subject_10",
-          "subject_12"
-        ],
-        [
-          "subject_07",
-          "subject_08",
-          "subject_15",
-          "subject_16"
-        ]
+      "test_participant_counts_per_fold": [
+        4,
+        3,
+        3,
+        3,
+        3
       ]
     },
     "support_vector_machine": {
-      "accuracy": 0.4501723854867838,
-      "precision_macro": 0.4361983478297227,
-      "recall_macro": 0.45139198055669644,
-      "f1_macro": 0.4397088063856524,
+      "accuracy": 0.4438396833250866,
+      "precision_macro": 0.43137955080987406,
+      "recall_macro": 0.44495631794684815,
+      "f1_macro": 0.43517249077805736,
       "confusion_matrix": [
         [
-          1386,
-          243,
-          376
+          1334,
+          280,
+          382
         ],
         [
-          537,
-          565,
-          925
+          547,
+          574,
+          896
         ],
         [
-          531,
-          737,
-          791
+          510,
+          757,
+          783
         ]
       ],
       "per_class": {
         "low": {
-          "precision": 0.5647921760391198,
-          "recall": 0.6912718204488778,
-          "f1": 0.6216640502354788,
-          "support": 2005
+          "precision": 0.5579255541614387,
+          "recall": 0.6683366733466933,
+          "f1": 0.6081604741281058,
+          "support": 1996
         },
         "moderate": {
-          "precision": 0.3656957928802589,
-          "recall": 0.27873704982733105,
-          "f1": 0.31634938409854424,
-          "support": 2027
+          "precision": 0.35630043451272503,
+          "recall": 0.2845810609816559,
+          "f1": 0.3164277839029768,
+          "support": 2017
         },
         "high": {
-          "precision": 0.37810707456978965,
-          "recall": 0.3841670713938805,
-          "f1": 0.3811129848229342,
-          "support": 2059
+          "precision": 0.3799126637554585,
+          "recall": 0.38195121951219513,
+          "f1": 0.3809292143030893,
+          "support": 2050
         }
       },
-      "participant_folds": [
-        [
-          "subject_02",
-          "subject_05",
-          "subject_06"
-        ],
-        [
-          "subject_03",
-          "subject_11",
-          "subject_13"
-        ],
-        [
-          "subject_01",
-          "subject_09",
-          "subject_14"
-        ],
-        [
-          "subject_04",
-          "subject_10",
-          "subject_12"
-        ],
-        [
-          "subject_07",
-          "subject_08",
-          "subject_15",
-          "subject_16"
-        ]
+      "test_participant_counts_per_fold": [
+        4,
+        3,
+        3,
+        3,
+        3
       ]
     },
     "gradient_boosting": {
-      "accuracy": 0.45673945164997537,
-      "precision_macro": 0.4442532764981024,
-      "recall_macro": 0.4574899448958481,
-      "f1_macro": 0.4492625940022614,
+      "accuracy": 0.47550717466600695,
+      "precision_macro": 0.4632637860106748,
+      "recall_macro": 0.4762877538091286,
+      "f1_macro": 0.4677954655290521,
       "confusion_matrix": [
         [
-          1324,
-          400,
-          281
+          1354,
+          393,
+          249
         ],
         [
-          550,
-          523,
-          954
+          543,
+          583,
+          891
         ],
         [
-          370,
-          754,
-          935
+          404,
+          700,
+          946
         ]
       ],
       "per_class": {
         "low": {
-          "precision": 0.5900178253119429,
-          "recall": 0.6603491271820449,
-          "f1": 0.6232054601082607,
-          "support": 2005
+          "precision": 0.5884398087787919,
+          "recall": 0.6783567134268537,
+          "f1": 0.6302071212473819,
+          "support": 1996
         },
         "moderate": {
-          "precision": 0.3118664281454979,
-          "recall": 0.25801677355698077,
-          "f1": 0.28239740820734344,
-          "support": 2027
+          "precision": 0.3478520286396181,
+          "recall": 0.2890431333663857,
+          "f1": 0.3157324668291362,
+          "support": 2017
         },
         "high": {
-          "precision": 0.4308755760368664,
-          "recall": 0.4541039339485187,
-          "f1": 0.44218491369117996,
-          "support": 2059
+          "precision": 0.4534995206136146,
+          "recall": 0.46146341463414636,
+          "f1": 0.4574468085106383,
+          "support": 2050
         }
       },
-      "participant_folds": [
-        [
-          "subject_02",
-          "subject_05",
-          "subject_06"
-        ],
-        [
-          "subject_03",
-          "subject_11",
-          "subject_13"
-        ],
-        [
-          "subject_01",
-          "subject_09",
-          "subject_14"
-        ],
-        [
-          "subject_04",
-          "subject_10",
-          "subject_12"
-        ],
-        [
-          "subject_07",
-          "subject_08",
-          "subject_15",
-          "subject_16"
-        ]
+      "test_participant_counts_per_fold": [
+        4,
+        3,
+        3,
+        3,
+        3
       ]
     }
   },
-  "selected_model": "random_forest",
+  "selected_model": "gradient_boosting",
   "saved_model": "D:\\1Projectss\\Neuroverse\\ml\\models\\workload_classifier.joblib",
   "heldout_predictions": "D:\\1Projectss\\Neuroverse\\ml\\reports\\heldout_predictions.parquet",
-  "trained_at": "2026-11-07T14:30:58.353878-05:00"
+  "trained_at": "2026-11-07T14:38:31.915292-05:00"
 }

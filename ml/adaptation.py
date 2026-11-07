@@ -25,15 +25,15 @@ class AdaptiveEngine:
     def __init__(
         self,
         *,
-        min_confidence: float = 0.65,
+        min_model_score: float = 0.65,
         consistent_count: int = 3,
         cooldown_seconds: float = 30.0,
     ):
-        if not 0 <= min_confidence <= 1:
-            raise ValueError("min_confidence must be between 0 and 1.")
+        if not 0 <= min_model_score <= 1:
+            raise ValueError("min_model_score must be between 0 and 1.")
         if consistent_count < 1 or cooldown_seconds < 0:
             raise ValueError("consistent_count must be positive and cooldown non-negative.")
-        self.min_confidence = min_confidence
+        self.min_model_score = min_model_score
         self.consistent_count = consistent_count
         self.cooldown_seconds = cooldown_seconds
         self._candidate: str | None = None
@@ -41,12 +41,12 @@ class AdaptiveEngine:
         self._last_change_at = float("-inf")
         self.state = AdaptationState()
 
-    def update(self, workload_class: str, confidence: float, timestamp: float) -> AdaptationState:
+    def update(self, workload_class: str, model_score: float, timestamp: float) -> AdaptationState:
         if workload_class not in {"low", "moderate", "high"}:
             raise ValueError(f"Unsupported workload class: {workload_class}")
-        if not 0 <= confidence <= 1:
-            raise ValueError("confidence must be between 0 and 1.")
-        if confidence < self.min_confidence:
+        if not 0 <= model_score <= 1:
+            raise ValueError("model_score must be between 0 and 1.")
+        if model_score < self.min_model_score:
             self._candidate = None
             self._streak = 0
             self.state = AdaptationState(

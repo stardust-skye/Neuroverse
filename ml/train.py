@@ -153,7 +153,7 @@ def train() -> dict:
     oof = frame[["subject", "test", "workload_class", "window_start"]].copy()
     oof["predicted_code"] = selected_predictions
     oof["predicted_class"] = [TEST_TO_CLASS[int(code)] for code in selected_predictions]
-    oof["confidence"] = selected_probabilities.max(axis=1)
+    oof["model_score"] = selected_probabilities.max(axis=1)
     for index, name in enumerate(CLASS_NAMES):
         oof[f"probability_{name}"] = selected_probabilities[:, index]
     heldout_path = ROOT / "ml" / "reports" / "heldout_predictions.parquet"
