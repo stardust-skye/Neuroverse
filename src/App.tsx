@@ -5,22 +5,40 @@ import {
   ArrowDown, ArrowLeft, ArrowRight, AudioLines, BookOpen, Check, Crosshair,
   Command, Download, Eye, Gamepad2, Heart, Image as ImageIcon, Images, Lightbulb, Menu,
   PawPrint, Pause, Play, Plus, Radio, Redo2, RotateCcw, Save, ScanFace, Settings2, Sparkles, Stars, Sun, Trash2, Undo2, WandSparkles,
-  X, Zap,
+  Target, X, Zap,
 } from 'lucide-react'
 import { story } from './storyData'
+import {
+  fitGazeMap,
+  GAZE_CALIBRATION_TARGETS,
+  isGazeOutlier,
+  mapGazeToScreen,
+  smoothGazePoint,
+  summarizeGazeSamples,
+} from './gaze'
+import type { GazeCalibrationPoint, GazeMap, GazePoint as StudioPoint } from './gaze'
+import { adaptChallenge, initialChallengeState, targetGridCell } from './challenge'
+import type { ChallengeMetrics, ChallengeState, StrainState } from './challenge'
+import { appendStrokeSegment, cloneStrokeHistory } from './strokes'
+import type { RecordedStroke, StrokeSegment } from './strokes'
+import type { FacialGesture } from './gestures'
+import { canCompleteChallenge, shouldPauseForLostFace, shouldStartSpaceDrawing, shouldStopSpaceDrawing } from './studioControls'
 import { EEG_SERVICE_MESSAGE } from './services/eegService'
 import WebcamInput from './WebcamInput'
 import { initialWorkloadAdaptation } from './types'
 import type { InputSource, Movement, MovementEvent, WorkloadAdaptation, WorkloadPrediction } from './types'
 
-type Page = 'home' | 'explore' | 'calibration' | 'story' | 'pet' | 'create' | 'adapt' | 'about'
+type Page = 'home' | 'explore' | 'calibration' | 'story' | 'pet' | 'create' | 'play' | 'adapt' | 'about'
 type Action = 'confirm' | 'switch' | 'special'
-type SavedArt = { name: string; image: string; date: string }
+type SavedArt = { name: string; image: string; date: string; strokes?: RecordedStroke[] }
+type CanvasSnapshot = { image: HTMLCanvasElement; strokes: RecordedStroke[] }
+type StudioMode = 'create' | 'play'
 
 const experiences = [
   { id: 'story' as const, number: '01', title: 'THE LAST SIGNAL', mode: 'STORY MODE', description: 'Your movements. Your choices. Your story.', icon: BookOpen, className: 'story-art', tag: 'A branching cinematic' },
   { id: 'pet' as const, number: '02', title: 'A LITTLE MAGIC', mode: 'PET MODE', description: 'Meet a creature that grows with every interaction.', icon: PawPrint, className: 'pet-art', tag: 'A tiny life, yours to shape' },
   { id: 'create' as const, number: '03', title: 'LIVING COLOR', mode: 'CREATE MODE', description: 'Turn your movements into living digital art.', icon: WandSparkles, className: 'create-art', tag: 'Your hands-free art studio' },
+  { id: 'play' as const, number: '04', title: 'THE QUIET SIGNAL', mode: 'PLAY MODE', description: 'Paint a target and let difficulty respond cautiously to performance and signal status.', icon: Target, className: 'play-art', tag: 'A paced precision challenge' },
 ]
 
 const defaultMapping: Record<Movement, Action | 'none'> = {
@@ -37,46 +55,10 @@ const ART_COLOR_NAMES = [
 ]
 const BRUSHES = ['normal', 'soft', 'spray', 'neon', 'particle'] as const
 type BrushType = typeof BRUSHES[number]
-type GazeCalibrationPoint = { raw: { x: number; y: number }; target: { x: number; y: number } }
-type GazeMap = { x: [number, number, number]; y: [number, number, number] }
-type StudioPoint = { x: number; y: number }
-
 const movementNames: Record<Movement, string> = {
   BLINK: 'Blink', WINK: 'Wink', JAW_CLENCH: 'Jaw clench', REST: 'Rest', UNKNOWN: 'Unknown',
 }
 const actionNames: Record<Action, string> = { confirm: 'Confirm / interact', switch: 'Switch / change', special: 'Special action' }
-
-function fitGazeMap(samples: GazeCalibrationPoint[]): GazeMap | null {
-  const solve = (axis: 'x' | 'y') => {
-    const matrix = Array.from({ length: 3 }, () => [0, 0, 0, 0])
-    for (const sample of samples) {
-      const row = [sample.raw.x, sample.raw.y, 1]
-      for (let i = 0; i < 3; i++) {
-        for (let j = 0; j < 3; j++) matrix[i][j] += row[i] * row[j]
-        matrix[i][3] += row[i] * sample.target[axis]
-      }
-    }
-    for (let column = 0; column < 3; column++) {
-      let pivot = column
-      for (let row = column + 1; row < 3; row++) {
-        if (Math.abs(matrix[row][column]) > Math.abs(matrix[pivot][column])) pivot = row
-      }
-      if (Math.abs(matrix[pivot][column]) < 1e-8) return null
-      ;[matrix[column], matrix[pivot]] = [matrix[pivot], matrix[column]]
-      const divisor = matrix[column][column]
-      for (let j = column; j < 4; j++) matrix[column][j] /= divisor
-      for (let row = 0; row < 3; row++) {
-        if (row === column) continue
-        const factor = matrix[row][column]
-        for (let j = column; j < 4; j++) matrix[row][j] -= factor * matrix[column][j]
-      }
-    }
-    return matrix.map((row) => row[3]) as [number, number, number]
-  }
-  const x = solve('x')
-  const y = solve('y')
-  return x && y ? { x, y } : null
-}
 
 function drawBrushSegment(
   context: CanvasRenderingContext2D,
@@ -175,7 +157,7 @@ function Brand({ onClick }: { onClick: () => void }) {
 
 function App() {
   const [page, setPage] = useState<Page>('home')
-  const [pendingExperience, setPendingExperience] = useState<'story' | 'pet' | 'create'>('story')
+  const [pendingExperience, setPendingExperience] = useState<'story' | 'pet' | 'create' | 'play'>('story')
   const [source, setSource] = useState<InputSource>('simulation')
   const [webcamActive, setWebcamActive] = useState(false)
   const [workloadAdaptation, setWorkloadAdaptation] = useState<WorkloadAdaptation>(initialWorkloadAdaptation)
@@ -204,6 +186,7 @@ function App() {
       }
       const target = event.target
       if (target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))) return
+      if ((page === 'create' || page === 'play') && event.code === 'Space') return
       const keyMap: Record<string, Movement> = { ' ': 'BLINK', a: 'WINK', s: 'JAW_CLENCH', r: 'REST' }
       const movement = keyMap[event.key.toLowerCase()]
       if (movement) {
@@ -213,7 +196,7 @@ function App() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [emit])
+  }, [emit, page])
 
   useEffect(() => {
     localStorage.setItem('neuroverse.mapping', JSON.stringify(mapping))
@@ -228,7 +211,7 @@ function App() {
   const reportWebcamStatus = useCallback((active: boolean) => setWebcamActive(active), [])
 
   return (
-    <div className={page === 'create' ? 'app-shell studio-active' : 'app-shell'}>
+    <div className={page === 'create' || page === 'play' ? 'app-shell studio-active' : 'app-shell'}>
       <div className="ambient ambient-one" /><div className="ambient ambient-two" />
       <header className="topbar">
         <Brand onClick={() => navigate('home')} />
@@ -254,7 +237,7 @@ function App() {
             {page === 'calibration' && <Calibration navigate={navigate} destination={pendingExperience} source={source} setSource={setSource} onMovement={emit} onWebcamStatus={reportWebcamStatus} currentEvent={currentEvent} mapping={mapping} setMapping={setMapping} />}
             {page === 'story' && <StoryMode navigate={navigate} actionFor={actionFor} lastMovement={currentEvent} adaptation={workloadAdaptation} />}
             {page === 'pet' && <PetMode navigate={navigate} actionFor={actionFor} lastMovement={currentEvent} adaptation={workloadAdaptation} />}
-            {page === 'create' && <CreateMode navigate={navigate} actionFor={actionFor} lastMovement={currentEvent} onMovement={emit} adaptation={workloadAdaptation} onWebcamStatus={reportWebcamStatus} />}
+            {(page === 'create' || page === 'play') && <CreateMode navigate={navigate} actionFor={actionFor} lastMovement={currentEvent} onMovement={emit} adaptation={workloadAdaptation} onWebcamStatus={reportWebcamStatus} initialMode={page} />}
             {page === 'adapt' && <NeuroAdaptDashboard onAdaptation={setWorkloadAdaptation} />}
             {page === 'about' && <About navigate={navigate} />}
           </motion.div>
@@ -269,7 +252,7 @@ function App() {
   )
 }
 
-function Landing({ navigate, onChoose }: { navigate: (page: Page) => void; onChoose: (experience: 'story' | 'pet' | 'create') => void }) {
+function Landing({ navigate, onChoose }: { navigate: (page: Page) => void; onChoose: (experience: 'story' | 'pet' | 'create' | 'play') => void }) {
   return <div className="landing">
     <section className="hero">
       <div className="hero-copy">
@@ -283,14 +266,14 @@ function Landing({ navigate, onChoose }: { navigate: (page: Page) => void; onCho
         <div className="portal-grid" /><div className="portal-orbit orbit-a" /><div className="portal-orbit orbit-b" /><div className="portal-core"><div className="core-glow" /><div className="core-ring" /><span className="core-star">✳</span></div>
         <div className="portal-spark spark-a">✦</div><div className="portal-spark spark-b">·</div><div className="portal-spark spark-c">✧</div>
         <div className="portal-caption"><span>FIG. 01</span><i /><span>THE NEUROVERSE GATE</span></div>
-        <div className="portal-label label-left"><span className="label-dot" /> SIGNAL DETECTED <small>0.98 / ACTIVE</small></div>
-        <div className="portal-label label-right"><small>NEURAL INTERFACE</small><span>READY TO CONNECT</span></div>
+        <div className="portal-label label-left"><span className="label-dot" /> LOCAL DEMO <small>KEYBOARD READY</small></div>
+        <div className="portal-label label-right"><small>OPTIONAL WEBCAM</small><span>NO EEG CONNECTED</span></div>
         <div className="hero-floating">MOVE A LITTLE.<br /><span>FEEL A LOT.</span></div>
       </div>
       <div className="hero-scroll"><ArrowDown size={13} /> SCROLL TO EXPLORE <span>01 — 03</span></div>
     </section>
-    <section className="experience-strip"><div className="strip-heading"><span className="eyebrow">THREE WORLDS. ONE YOU.</span><button className="text-button" onClick={() => navigate('explore')}>EXPLORE ALL <ArrowRight size={14} /></button></div>
-      <div className="experience-preview">{experiences.map((item) => <button key={item.id} className={`preview-tile ${item.className}`} onClick={() => onChoose(item.id)}><div className="tile-symbol">{item.id === 'story' ? <BookOpen /> : item.id === 'pet' ? <PawPrint /> : <WandSparkles />}</div><span>{item.mode}</span><strong>{item.title}</strong><small>{item.tag}</small><ArrowRight className="tile-arrow" size={16} /></button>)}</div>
+    <section className="experience-strip"><div className="strip-heading"><span className="eyebrow">FOUR WORLDS. ONE YOU.</span><button className="text-button" onClick={() => navigate('explore')}>EXPLORE ALL <ArrowRight size={14} /></button></div>
+      <div className="experience-preview">{experiences.map((item) => <button key={item.id} className={`preview-tile ${item.className}`} onClick={() => onChoose(item.id)}><div className="tile-symbol">{item.id === 'story' ? <BookOpen /> : item.id === 'pet' ? <PawPrint /> : item.id === 'play' ? <Target /> : <WandSparkles />}</div><span>{item.mode}</span><strong>{item.title}</strong><small>{item.tag}</small><ArrowRight className="tile-arrow" size={16} /></button>)}</div>
     </section>
     <HowItWorks navigate={navigate} />
   </div>
@@ -298,19 +281,19 @@ function Landing({ navigate, onChoose }: { navigate: (page: Page) => void; onCho
 
 function HowItWorks({ navigate }: { navigate: (page: Page) => void }) {
   return <section className="how-section" id="how-it-works"><div className="section-lead"><div><span className="eyebrow">SIMPLE BY DESIGN</span><h2>YOU’RE THE<br /><span>CONTROLLER.</span></h2></div><p>No headset. No learning curve. Just small, natural movements that turn a story into something that feels like yours.</p></div>
-    <div className="movement-explainer">{[['BLINK', 'A quick blink confirms your choice.', '◉'], ['WINK', 'A wink moves you between options.', '◒'], ['JAW CLENCH', 'A clench unleashes a special action.', '⌁']].map(([name, text, glyph], index) => <div className="movement-step" key={name}><span className="step-num">0{index + 1}</span><span className="movement-glyph">{glyph}</span><strong>{name}</strong><p>{text}</p></div>)}</div>
+    <div className="movement-explainer">{[['BLINK', 'A recognized blink advances the highlighted control.', '◉'], ['WINK', 'A sustained left or right wink selects that control.', '◒'], ['HOLD TO DRAW', 'Hold Space or the mouse button; webcam jaw clench is not inferred.', '⌁']].map(([name, text, glyph], index) => <div className="movement-step" key={name}><span className="step-num">0{index + 1}</span><span className="movement-glyph">{glyph}</span><strong>{name}</strong><p>{text}</p></div>)}</div>
     <div className="how-bottom"><span>START WITH KEYBOARD OR WEBCAM. EEG IS COMING SOON.</span><button className="text-button" onClick={() => navigate('calibration')}>SET UP YOUR INPUT <ArrowRight size={14} /></button></div>
   </section>
 }
 
-function Explore({ navigate, onChoose }: { navigate: (page: Page) => void; onChoose: (experience: 'story' | 'pet' | 'create') => void }) {
-  return <section className="subpage explore-page"><div className="page-heading"><span className="eyebrow">YOUR UNIVERSE AWAITS</span><h1>CHOOSE YOUR<br /><span>ADVENTURE.</span></h1><p>Three ways to step out of the ordinary. Pick a world to make your own.</p></div>
-    <div className="universe-grid">{experiences.map((item) => { const Icon = item.icon; return <article className={`universe-card ${item.className}`} key={item.id}><div className="universe-card-visual"><span className="universe-index">{item.number} / 03</span><div className="visual-orb">{item.id === 'story' ? <div className="orb-station"><span /><i /><b /></div> : item.id === 'pet' ? <div className="creature-mini"><i /><b /><span /></div> : <div className="mini-art"><i /><i /><i /><i /></div>}</div><span className="universe-badge"><Icon size={14} /> {item.mode}</span></div><div className="universe-card-copy"><div><span className="eyebrow">{item.tag}</span><h2>{item.title}</h2><p>{item.description}</p></div><button className="round-arrow" aria-label={`Enter ${item.mode}`} onClick={() => onChoose(item.id)}><ArrowRight size={18} /></button></div></article>})}</div>
+function Explore({ navigate, onChoose }: { navigate: (page: Page) => void; onChoose: (experience: 'story' | 'pet' | 'create' | 'play') => void }) {
+  return <section className="subpage explore-page"><div className="page-heading"><span className="eyebrow">YOUR UNIVERSE AWAITS</span><h1>CHOOSE YOUR<br /><span>ADVENTURE.</span></h1><p>Four ways to step out of the ordinary. Pick a world to make your own.</p></div>
+    <div className="universe-grid">{experiences.map((item) => { const Icon = item.icon; return <article className={`universe-card ${item.className}`} key={item.id}><div className="universe-card-visual"><span className="universe-index">{item.number} / 04</span><div className="visual-orb">{item.id === 'story' ? <div className="orb-station"><span /><i /><b /></div> : item.id === 'pet' ? <div className="creature-mini"><i /><b /><span /></div> : item.id === 'play' ? <Target size={43} /> : <div className="mini-art"><i /><i /><i /><i /></div>}</div><span className="universe-badge"><Icon size={14} /> {item.mode}</span></div><div className="universe-card-copy"><div><span className="eyebrow">{item.tag}</span><h2>{item.title}</h2><p>{item.description}</p></div><button className="round-arrow" aria-label={`Enter ${item.mode}`} onClick={() => onChoose(item.id)}><ArrowRight size={18} /></button></div></article>})}</div>
     <div className="page-bottom-note"><span className="status-dot" /> YOUR INPUT CAN BE CHANGED ANYTIME <button onClick={() => navigate('calibration')}>SET UP INPUT <ArrowRight size={14} /></button></div>
   </section>
 }
 
-function Calibration({ navigate, destination, source, setSource, onMovement, onWebcamStatus, currentEvent, mapping, setMapping }: { navigate: (page: Page) => void; destination: 'story' | 'pet' | 'create'; source: InputSource; setSource: (source: InputSource) => void; onMovement: (event: MovementEvent) => void; onWebcamStatus: (active: boolean) => void; currentEvent: MovementEvent | null; mapping: Record<Movement, Action | 'none'>; setMapping: (mapping: Record<Movement, Action | 'none'>) => void }) {
+function Calibration({ navigate, destination, source, setSource, onMovement, onWebcamStatus, currentEvent, mapping, setMapping }: { navigate: (page: Page) => void; destination: 'story' | 'pet' | 'create' | 'play'; source: InputSource; setSource: (source: InputSource) => void; onMovement: (event: MovementEvent) => void; onWebcamStatus: (active: boolean) => void; currentEvent: MovementEvent | null; mapping: Record<Movement, Action | 'none'>; setMapping: (mapping: Record<Movement, Action | 'none'>) => void }) {
   return <section className="subpage calibration-page"><button className="back-link" onClick={() => navigate('explore')}><ArrowLeft size={15} /> BACK TO WORLDS</button>
     <div className="page-heading calibration-heading"><span className="eyebrow">BEFORE WE BEGIN</span><h1>FIND YOUR<br /><span>RHYTHM.</span></h1><p>Choose how you’d like to move through the universe. Keyboard simulation is ready now; webcam is optional.</p></div>
     <div className="setup-layout"><div className="setup-left"><span className="eyebrow">01 / INPUT SOURCE</span>
@@ -408,12 +391,21 @@ function PetMode({ navigate, actionFor, lastMovement, adaptation }: { navigate: 
   </section>
 }
 
-function CreateMode({ navigate, actionFor, lastMovement, onMovement, adaptation, onWebcamStatus }: { navigate: (page: Page) => void; actionFor: (movement: Movement) => Action | 'none'; lastMovement: MovementEvent | null; onMovement: (event: MovementEvent) => void; adaptation: WorkloadAdaptation; onWebcamStatus: (active: boolean) => void }) {
+function CreateMode({ navigate, actionFor, lastMovement, onMovement, adaptation, onWebcamStatus, initialMode = 'create' }: { navigate: (page: Page) => void; actionFor: (movement: Movement) => Action | 'none'; lastMovement: MovementEvent | null; onMovement: (event: MovementEvent) => void; adaptation: WorkloadAdaptation; onWebcamStatus: (active: boolean) => void; initialMode?: StudioMode }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const animationCanvasRef = useRef<HTMLCanvasElement>(null)
   const cursorRef = useRef<HTMLDivElement>(null)
-  const undoRef = useRef<HTMLCanvasElement[]>([])
-  const redoRef = useRef<HTMLCanvasElement[]>([])
+  const undoRef = useRef<CanvasSnapshot[]>([])
+  const redoRef = useRef<CanvasSnapshot[]>([])
+  const strokeHistoryRef = useRef<RecordedStroke[]>([])
+  const strokeOpenRef = useRef(false)
+  const lastStrokePointRef = useRef<{ x: number; y: number; timestamp: number } | null>(null)
+  const keyboardDrawingRef = useRef(false)
+  const pointerStartedModeRef = useRef(false)
+  const animationFrameRef = useRef<number | null>(null)
   const previousGazeRef = useRef<StudioPoint | null>(null)
+  const pendingGazeOutlierRef = useRef<StudioPoint | null>(null)
+  const lastRawGazeRef = useRef<StudioPoint | null>(null)
   const previousPointerRef = useRef<StudioPoint | null>(null)
   const pointerDrawingRef = useRef(false)
   const gazeMapRef = useRef<GazeMap | null>(null)
@@ -422,6 +414,7 @@ function CreateMode({ navigate, actionFor, lastMovement, onMovement, adaptation,
   const calibrationDataRef = useRef<GazeCalibrationPoint[]>([])
   const calibrationTimerRef = useRef<number | null>(null)
   const pulseTimerRef = useRef<number | null>(null)
+  const gestureStatusTimerRef = useRef<number | null>(null)
   const lastPulseAtRef = useRef(0)
   const smoothedCursorRef = useRef<StudioPoint | null>(null)
   const cameraActiveRef = useRef(false)
@@ -431,6 +424,22 @@ function CreateMode({ navigate, actionFor, lastMovement, onMovement, adaptation,
   const sizeRef = useRef(8)
   const lastMovementAt = useRef(lastMovement?.timestamp ?? 0)
   const faceDetectedRef = useRef(false)
+  const challengeStateRef = useRef<ChallengeState>({
+    ...initialChallengeState,
+    lastDifficultyChangeAt: initialMode === 'play' ? Date.now() : 0,
+  })
+  const challengeCellsRef = useRef(new Set<number>())
+  const challengeHitsRef = useRef(0)
+  const challengeMissesRef = useRef(0)
+  const challengeStartedAtRef = useRef(Date.now())
+  const challengeStrainRef = useRef<StrainState>('unknown')
+  const challengeSimulationRef = useRef(false)
+  const challengeRoundDoneRef = useRef(false)
+  const finishChallengeRef = useRef<() => void>(() => {})
+  const focusedControlRef = useRef(0)
+  const lastDiagnosticsUpdateRef = useRef(0)
+  const diagnosticsOpenRef = useRef(false)
+  const studioModeRef = useRef<StudioMode>(initialMode)
   const [brush, setBrush] = useState<BrushType>('normal')
   const [color, setColor] = useState('#ffffff')
   const [brushSize, setBrushSize] = useState(8)
@@ -440,22 +449,36 @@ function CreateMode({ navigate, actionFor, lastMovement, onMovement, adaptation,
   const [name, setName] = useState('')
   const [gallery, setGallery] = useState<SavedArt[]>(() => readStorage('neuroverse.gallery', []))
   const [message, setMessage] = useState('')
+  const [studioMode, setStudioMode] = useState<StudioMode>(initialMode)
+  const [artAnimating, setArtAnimating] = useState(false)
+  const [gestureStatus, setGestureStatus] = useState('NEUTRAL')
+  const [focusedControl, setFocusedControl] = useState(0)
+  const [strainState, setStrainState] = useState<StrainState>('unknown')
+  const [viewport, setViewport] = useState({ width: window.innerWidth, height: window.innerHeight })
+  const [challengeState, setChallengeState] = useState<ChallengeState>(() => ({
+    ...initialChallengeState,
+    lastDifficultyChangeAt: initialMode === 'play' ? Date.now() : 0,
+  }))
+  const [challengeCells, setChallengeCells] = useState(0)
+  const [challengeHits, setChallengeHits] = useState(0)
+  const [challengeMisses, setChallengeMisses] = useState(0)
+  const [challengeElapsed, setChallengeElapsed] = useState(0)
+  const [challengeRoundDone, setChallengeRoundDone] = useState(false)
+  const [lastChallengeMetrics, setLastChallengeMetrics] = useState<ChallengeMetrics | null>(null)
+  const [challengeSimulation, setChallengeSimulation] = useState(false)
   const [gazeMap, setGazeMap] = useState<GazeMap | null>(null)
   const [cursorSource, setCursorSource] = useState<'gaze' | 'pointer' | null>(null)
   const [cameraActive, setCameraActive] = useState(false)
   const [faceDetected, setFaceDetected] = useState(false)
+  const [diagnosticsOpen, setDiagnosticsOpen] = useState(false)
+  const [gestureSensitivity, setGestureSensitivity] = useState(6)
+  const [diagnosticGaze, setDiagnosticGaze] = useState<StudioPoint | null>(null)
+  const [diagnosticCursor, setDiagnosticCursor] = useState<StudioPoint | null>(null)
   const [calibrationIndex, setCalibrationIndex] = useState<number | null>(null)
   const [calibrationCapture, setCalibrationCapture] = useState(false)
   const [calibrationHint, setCalibrationHint] = useState('')
   const calibrationOpenRef = useRef(false)
 
-  const calibrationTargets = [
-    { x: 0.5, y: 0.5, label: 'CENTER' },
-    { x: 0.1, y: 0.1, label: 'TOP LEFT' },
-    { x: 0.9, y: 0.1, label: 'TOP RIGHT' },
-    { x: 0.1, y: 0.9, label: 'BOTTOM LEFT' },
-    { x: 0.9, y: 0.9, label: 'BOTTOM RIGHT' },
-  ]
   gazeMapRef.current = gazeMap
   drawingRef.current = painting
   brushRef.current = brush
@@ -463,6 +486,12 @@ function CreateMode({ navigate, actionFor, lastMovement, onMovement, adaptation,
   sizeRef.current = brushSize
   cameraActiveRef.current = cameraActive
   calibrationOpenRef.current = calibrationIndex !== null
+  diagnosticsOpenRef.current = diagnosticsOpen
+  focusedControlRef.current = focusedControl
+  challengeStrainRef.current = strainState
+  challengeRoundDoneRef.current = challengeRoundDone
+  studioModeRef.current = studioMode
+  challengeStateRef.current = challengeState
 
   const cloneCanvas = () => {
     const canvas = canvasRef.current
@@ -476,28 +505,32 @@ function CreateMode({ navigate, actionFor, lastMovement, onMovement, adaptation,
   const snapshot = () => {
     const copy = cloneCanvas()
     if (!copy) return
-    undoRef.current = [...undoRef.current.slice(-29), copy]
+    undoRef.current = [...undoRef.current.slice(-29), {
+      image: copy,
+      strokes: cloneStrokeHistory(strokeHistoryRef.current),
+    }]
     redoRef.current = []
   }
-  const restoreCanvas = (image: HTMLCanvasElement | undefined) => {
+  const restoreCanvas = (snapshot: CanvasSnapshot | undefined) => {
     const canvas = canvasRef.current
     const context = canvas?.getContext('2d')
-    if (!canvas || !context || !image) return
+    if (!canvas || !context || !snapshot) return
     context.clearRect(0, 0, canvas.width, canvas.height)
-    context.drawImage(image, 0, 0, image.width, image.height, 0, 0, canvas.clientWidth, canvas.clientHeight)
+    context.drawImage(snapshot.image, 0, 0, snapshot.image.width, snapshot.image.height, 0, 0, canvas.clientWidth, canvas.clientHeight)
+    strokeHistoryRef.current = cloneStrokeHistory(snapshot.strokes)
   }
   const undo = () => {
     const previous = undoRef.current.pop()
     if (!previous) return
     const current = cloneCanvas()
-    if (current) redoRef.current.push(current)
+    if (current) redoRef.current.push({ image: current, strokes: cloneStrokeHistory(strokeHistoryRef.current) })
     restoreCanvas(previous)
   }
   const redo = () => {
     const next = redoRef.current.pop()
     if (!next) return
     const current = cloneCanvas()
-    if (current) undoRef.current.push(current)
+    if (current) undoRef.current.push({ image: current, strokes: cloneStrokeHistory(strokeHistoryRef.current) })
     restoreCanvas(next)
   }
 
@@ -514,6 +547,12 @@ function CreateMode({ navigate, actionFor, lastMovement, onMovement, adaptation,
       canvas.width = Math.round(rect.width * ratio)
       canvas.height = Math.round(rect.height * ratio)
       context.setTransform(ratio, 0, 0, ratio, 0, 0)
+      const animationCanvas = animationCanvasRef.current
+      if (animationCanvas) {
+        animationCanvas.width = canvas.width
+        animationCanvas.height = canvas.height
+      }
+      setViewport({ width: rect.width, height: rect.height })
       if (copy && copy.width && copy.height) {
         context.drawImage(copy, 0, 0, copy.width, copy.height, 0, 0, rect.width, rect.height)
       }
@@ -523,6 +562,72 @@ function CreateMode({ navigate, actionFor, lastMovement, onMovement, adaptation,
     resize()
     return () => observer.disconnect()
   }, [])
+
+  useEffect(() => {
+    if (!artAnimating) {
+      if (animationFrameRef.current !== null) cancelAnimationFrame(animationFrameRef.current)
+      animationFrameRef.current = null
+      const canvas = animationCanvasRef.current
+      canvas?.getContext('2d')?.clearRect(0, 0, canvas.width, canvas.height)
+      return
+    }
+    let active = true
+    const renderFrame = (timestamp: number) => {
+      const canvas = animationCanvasRef.current
+      const base = canvasRef.current
+      const context = canvas?.getContext('2d')
+      if (!active || !canvas || !base || !context) return
+      const ratio = Math.min(window.devicePixelRatio || 1, 2)
+      const width = canvas.width / ratio
+      const height = canvas.height / ratio
+      context.setTransform(ratio, 0, 0, ratio, 0, 0)
+      context.clearRect(0, 0, width, height)
+      context.save()
+      context.globalAlpha = 0.13 + (Math.sin(timestamp / 850) + 1) * 0.035
+      context.shadowBlur = 7
+      for (const stroke of strokeHistoryRef.current) {
+        for (const segment of stroke.segments) {
+          const drift = Math.sin(timestamp / 1150 + segment.to.timestamp / 900) * 1.4
+          context.beginPath()
+          context.moveTo(segment.from.x + drift, segment.from.y)
+          context.lineTo(segment.to.x + drift, segment.to.y)
+          context.strokeStyle = segment.color
+          context.lineWidth = Math.max(1, segment.size * 0.72)
+          context.lineCap = 'round'
+          context.shadowColor = segment.color
+          context.stroke()
+        }
+      }
+      context.restore()
+      animationFrameRef.current = requestAnimationFrame(renderFrame)
+    }
+    animationFrameRef.current = requestAnimationFrame(renderFrame)
+    return () => {
+      active = false
+      if (animationFrameRef.current !== null) cancelAnimationFrame(animationFrameRef.current)
+      animationFrameRef.current = null
+    }
+  }, [artAnimating])
+
+  useEffect(() => {
+    const tick = () => {
+      if (studioModeRef.current !== 'play' || challengeRoundDoneRef.current) return
+      const elapsed = Math.floor((Date.now() - challengeStartedAtRef.current) / 1000)
+      setChallengeElapsed(elapsed)
+      if (elapsed >= 45) finishChallengeRef.current()
+    }
+    const timer = window.setInterval(tick, 250)
+    return () => window.clearInterval(timer)
+  }, [studioMode])
+
+  useEffect(() => {
+    const controls = Array.from(document.querySelectorAll<HTMLButtonElement>('.gaze-studio [data-gaze-selectable="true"]'))
+      .filter((button) => !button.disabled)
+    controls.forEach((button, index) => {
+      button.classList.toggle('is-gaze-highlighted', index === focusedControl)
+      button.setAttribute('aria-current', index === focusedControl ? 'true' : 'false')
+    })
+  }, [focusedControl, openPanel, studioMode])
 
   useEffect(() => {
     const cursor = cursorRef.current
@@ -543,46 +648,118 @@ function CreateMode({ navigate, actionFor, lastMovement, onMovement, adaptation,
     }
     setCursorSource(source)
   }
+  const recordStrokeSegment = (from: StudioPoint, to: StudioPoint) => {
+    const now = performance.now()
+    const recordedFrom = strokeOpenRef.current && lastStrokePointRef.current
+      ? lastStrokePointRef.current
+      : { ...from, timestamp: now }
+    const segment: StrokeSegment = {
+      from: recordedFrom,
+      to: { ...to, timestamp: now },
+      brush: brushRef.current,
+      color: colorRef.current,
+      size: sizeRef.current,
+    }
+    strokeHistoryRef.current = appendStrokeSegment(
+      strokeHistoryRef.current,
+      segment,
+      !strokeOpenRef.current,
+    )
+    strokeOpenRef.current = true
+    lastStrokePointRef.current = segment.to
+    if (studioModeRef.current !== 'play' || challengeRoundDoneRef.current) return
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const bounds = { left: 0, top: 0, width: canvas.clientWidth, height: canvas.clientHeight }
+    const distance = Math.hypot(to.x - from.x, to.y - from.y)
+    const steps = Math.max(1, Math.ceil(distance / 6))
+    let hits = 0
+    let misses = 0
+    for (let index = 0; index <= steps; index++) {
+      const progress = index / steps
+      const point = {
+        x: from.x + (to.x - from.x) * progress,
+        y: from.y + (to.y - from.y) * progress,
+      }
+      const cell = targetGridCell(point, bounds, challengeStateRef.current.targetScale)
+      if (cell === null) misses++
+      else {
+        hits++
+        challengeCellsRef.current.add(cell)
+      }
+    }
+    challengeHitsRef.current += hits
+    challengeMissesRef.current += misses
+    setChallengeCells(challengeCellsRef.current.size)
+    setChallengeHits(challengeHitsRef.current)
+    setChallengeMisses(challengeMissesRef.current)
+  }
+  const focusGestureControl = (gesture: FacialGesture) => {
+    setGestureStatus(gesture.replaceAll('_', ' '))
+    if (gestureStatusTimerRef.current !== null) window.clearTimeout(gestureStatusTimerRef.current)
+    gestureStatusTimerRef.current = window.setTimeout(() => setGestureStatus('NEUTRAL'), 1400)
+    const controls = Array.from(document.querySelectorAll<HTMLButtonElement>('.gaze-studio [data-gaze-selectable="true"]'))
+      .filter((button) => !button.disabled)
+    if (!controls.length) return
+    if (gesture === 'NORMAL_BLINK') {
+      const next = (focusedControlRef.current + 1) % controls.length
+      focusedControlRef.current = next
+      setFocusedControl(next)
+      controls[next].focus({ preventScroll: true })
+      return
+    }
+    controls[focusedControlRef.current % controls.length]?.click()
+  }
   const handleGaze = useCallback((raw: StudioPoint | null) => {
     if (!raw) {
+      setDiagnosticGaze(null)
+      setDiagnosticCursor(null)
       previousGazeRef.current = null
+      pendingGazeOutlierRef.current = null
+      lastRawGazeRef.current = null
       smoothedCursorRef.current = null
-      const wasDrawing = drawingRef.current
+      const wasDrawing = shouldPauseForLostFace(drawingRef.current, cameraActiveRef.current, false)
       if (wasDrawing) {
         drawingRef.current = false
+        keyboardDrawingRef.current = false
+        strokeOpenRef.current = false
+        lastStrokePointRef.current = null
         setPainting(false)
         setMessage('Gaze lost · painting paused for safety')
       }
-      if (faceDetectedRef.current) {
-        faceDetectedRef.current = false
-        setFaceDetected(false)
-        setMessage(wasDrawing ? 'Gaze lost · painting paused for safety' : 'Face not detected · adjust your position or lighting')
-      }
+      if (wasDrawing) setMessage('Gaze lost · painting paused for safety')
       cursorRef.current?.classList.remove('is-visible', 'cursor-gaze')
       setCursorSource(null)
       return
     }
-    if (!faceDetectedRef.current) {
-      faceDetectedRef.current = true
-      setFaceDetected(true)
-      setMessage('')
+    if (isGazeOutlier(raw, lastRawGazeRef.current, pendingGazeOutlierRef.current)) {
+      pendingGazeOutlierRef.current = raw
+      return
     }
+    lastRawGazeRef.current = raw
+    pendingGazeOutlierRef.current = null
     if (captureRef.current) gazeSamplesRef.current.push(raw)
+    if (diagnosticsOpenRef.current && performance.now() - lastDiagnosticsUpdateRef.current >= 120) {
+      lastDiagnosticsUpdateRef.current = performance.now()
+      setDiagnosticGaze(raw)
+    }
     const map = gazeMapRef.current
     const canvas = canvasRef.current
     if (!map || !canvas) return
-    const screenX = (map.x[0] * raw.x + map.x[1] * raw.y + map.x[2]) * window.innerWidth
-    const screenY = (map.y[0] * raw.x + map.y[1] * raw.y + map.y[2]) * window.innerHeight
+    const mapped = mapGazeToScreen(raw, map)
+    const screenX = Math.max(0, Math.min(window.innerWidth, mapped.x * window.innerWidth))
+    const screenY = Math.max(0, Math.min(window.innerHeight, mapped.y * window.innerHeight))
     const rect = canvas.getBoundingClientRect()
     const target = {
       x: Math.max(0, Math.min(rect.width, screenX - rect.left)),
       y: Math.max(0, Math.min(rect.height, screenY - rect.top)),
     }
-    const previous = smoothedCursorRef.current
-    const smooth = previous
-      ? { x: previous.x + (target.x - previous.x) * 0.24, y: previous.y + (target.y - previous.y) * 0.24 }
-      : target
+    const smooth = smoothGazePoint(smoothedCursorRef.current, target)
     smoothedCursorRef.current = smooth
+    if (diagnosticsOpenRef.current && performance.now() - lastDiagnosticsUpdateRef.current >= 120) {
+      lastDiagnosticsUpdateRef.current = performance.now()
+      setDiagnosticCursor(smooth)
+    }
     showCursor(smooth, 'gaze')
     const inside = screenX >= rect.left && screenX <= rect.right && screenY >= rect.top && screenY <= rect.bottom
     const hit = inside ? document.elementFromPoint(screenX, screenY) : null
@@ -591,6 +768,7 @@ function CreateMode({ navigate, actionFor, lastMovement, onMovement, adaptation,
       const from = previousGazeRef.current ?? smooth
       const context = canvas.getContext('2d')
       if (context) drawBrushSegment(context, from, smooth, colorRef.current, sizeRef.current, brushRef.current)
+      recordStrokeSegment(from, smooth)
       const now = performance.now()
       if (now - lastPulseAtRef.current > 500 && cursorRef.current) {
         lastPulseAtRef.current = now
@@ -602,9 +780,23 @@ function CreateMode({ navigate, actionFor, lastMovement, onMovement, adaptation,
       previousGazeRef.current = smooth
     } else previousGazeRef.current = null
   }, [])
+  const handleFaceDetected = useCallback((detected: boolean) => {
+    if (faceDetectedRef.current === detected) return
+    faceDetectedRef.current = detected
+    setFaceDetected(detected)
+    if (detected) {
+      setMessage('')
+    } else if (drawingRef.current) {
+      setDrawMode(false)
+      setMessage('Face lost · painting paused for safety')
+    } else if (cameraActiveRef.current) {
+      setMessage('Face not detected · adjust your position or lighting')
+    }
+  }, [])
   const handleCameraStatus = useCallback((active: boolean) => {
     setCameraActive(active)
     cameraActiveRef.current = active
+    if (!active && drawingRef.current) setDrawMode(false)
     onWebcamStatus(active)
   }, [onWebcamStatus])
 
@@ -624,6 +816,8 @@ function CreateMode({ navigate, actionFor, lastMovement, onMovement, adaptation,
         : 'Mouse paint active · press G, Escape, or PAUSE to stop')
     } else {
       previousGazeRef.current = null
+      strokeOpenRef.current = false
+      lastStrokePointRef.current = null
       setMessage(cameraActiveRef.current && gazeMapRef.current ? 'Gaze cursor only · drawing paused' : 'Mouse paint paused')
     }
     drawingRef.current = enabled
@@ -634,25 +828,30 @@ function CreateMode({ navigate, actionFor, lastMovement, onMovement, adaptation,
     if (!lastMovement || lastMovement.timestamp === lastMovementAt.current) return
     lastMovementAt.current = lastMovement.timestamp
     const action = actionFor(lastMovement.movement)
-    if (lastMovement.movement === 'WINK' && action === 'switch') {
-      setDrawMode(!drawingRef.current)
+    if (lastMovement.source === 'simulation' && lastMovement.movement === 'WINK' && action === 'switch') {
+      focusGestureControl('LEFT_WINK')
       return
     }
-    if (lastMovement.movement === 'BLINK' && lastMovement.source !== 'webcam' && action === 'confirm') {
-      const next = ART_COLORS[(ART_COLORS.indexOf(colorRef.current) + 1) % ART_COLORS.length]
-      setColor(next)
-      setMessage('Color changed · a blink never starts drawing')
-      return
-    }
-    if (lastMovement.movement === 'JAW_CLENCH' && lastMovement.source !== 'webcam' && action === 'special') {
+    if (lastMovement.source === 'simulation' && lastMovement.movement === 'JAW_CLENCH' && action === 'special') {
       const next = BRUSHES[(BRUSHES.indexOf(brushRef.current) + 1) % BRUSHES.length]
       setBrush(next)
-      setMessage(`${next.toUpperCase()} brush selected`)
+      setMessage(`Keyboard simulation selected ${next.toUpperCase()} brush · webcam jaw detection is disabled`)
     }
   }, [lastMovement, actionFor])
 
   useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
+    const isEditable = (target: EventTarget | null) => target instanceof HTMLElement && (
+      target.isContentEditable
+      || ['TEXTAREA', 'SELECT'].includes(target.tagName)
+      || target instanceof HTMLInputElement && target.type !== 'range'
+    )
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (shouldStartSpaceDrawing(event.code, keyboardDrawingRef.current, isEditable(event.target))) {
+        event.preventDefault()
+        keyboardDrawingRef.current = true
+        setDrawMode(true)
+        return
+      }
       const target = event.target
       if (target instanceof HTMLElement && (
         target.isContentEditable
@@ -673,8 +872,25 @@ function CreateMode({ navigate, actionFor, lastMovement, onMovement, adaptation,
         setDrawMode(false)
       }
     }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    const onKeyUp = (event: KeyboardEvent) => {
+      if (!shouldStopSpaceDrawing(event.code, keyboardDrawingRef.current)) return
+      event.preventDefault()
+      keyboardDrawingRef.current = false
+      if (!pointerDrawingRef.current) setDrawMode(false)
+    }
+    const onWindowBlur = () => {
+      keyboardDrawingRef.current = false
+      pointerDrawingRef.current = false
+      if (drawingRef.current) setDrawMode(false)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('keyup', onKeyUp)
+    window.addEventListener('blur', onWindowBlur)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('keyup', onKeyUp)
+      window.removeEventListener('blur', onWindowBlur)
+    }
   }, [])
 
   const getCanvasPoint = (event: ReactPointerEvent<HTMLCanvasElement>): StudioPoint => {
@@ -684,8 +900,12 @@ function CreateMode({ navigate, actionFor, lastMovement, onMovement, adaptation,
   const pointerDown = (event: ReactPointerEvent<HTMLCanvasElement>) => {
     const point = getCanvasPoint(event)
     showCursor(point, 'pointer')
-    if (!drawingRef.current || event.button !== 0) return
-    snapshot()
+    if (event.button !== 0) return
+    pointerStartedModeRef.current = !drawingRef.current
+    if (pointerStartedModeRef.current) setDrawMode(true)
+    else snapshot()
+    strokeOpenRef.current = false
+    lastStrokePointRef.current = null
     pointerDrawingRef.current = true
     previousPointerRef.current = point
     event.currentTarget.setPointerCapture(event.pointerId)
@@ -693,25 +913,32 @@ function CreateMode({ navigate, actionFor, lastMovement, onMovement, adaptation,
   const pointerMove = (event: ReactPointerEvent<HTMLCanvasElement>) => {
     const point = getCanvasPoint(event)
     if (!cameraActiveRef.current || cursorSource !== 'gaze') showCursor(point, 'pointer')
-    if (!pointerDrawingRef.current || !drawingRef.current) return
+    if ((!pointerDrawingRef.current && !keyboardDrawingRef.current) || !drawingRef.current) return
     const previous = previousPointerRef.current ?? point
     const context = canvasRef.current?.getContext('2d')
     if (context) drawBrushSegment(context, previous, point, colorRef.current, sizeRef.current, brushRef.current)
+    recordStrokeSegment(previous, point)
     previousPointerRef.current = point
   }
   const pointerUp = (event: ReactPointerEvent<HTMLCanvasElement>) => {
     pointerDrawingRef.current = false
     previousPointerRef.current = null
+    strokeOpenRef.current = false
+    if (pointerStartedModeRef.current && !keyboardDrawingRef.current) setDrawMode(false)
+    pointerStartedModeRef.current = false
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
   }
 
   const clearCanvas = () => {
     if (!window.confirm('Clear the canvas? This can be undone.')) return
     setDrawMode(false)
+    setArtAnimating(false)
     snapshot()
     const canvas = canvasRef.current
     const context = canvas?.getContext('2d')
     if (canvas && context) context.clearRect(0, 0, canvas.width, canvas.height)
+    strokeHistoryRef.current = []
+    strokeOpenRef.current = false
     setOpenPanel(null)
     setMessage('Canvas cleared · use Undo to restore the previous artwork')
   }
@@ -731,6 +958,7 @@ function CreateMode({ navigate, actionFor, lastMovement, onMovement, adaptation,
         name: name.trim() || `Untitled ${gallery.length + 1}`,
         image,
         date: new Date().toLocaleDateString(),
+        strokes: cloneStrokeHistory(strokeHistoryRef.current),
       }
       downloadImage(image, `${item.name.replace(/[\\/:*?"<>|]/g, '-')}.png`)
       downloaded = true
@@ -750,7 +978,10 @@ function CreateMode({ navigate, actionFor, lastMovement, onMovement, adaptation,
       snapshot()
       const canvas = canvasRef.current
       const context = canvas?.getContext('2d')
-      if (canvas && context) context.drawImage(image, 0, 0, canvas.clientWidth, canvas.clientHeight)
+      if (canvas && context) {
+        context.drawImage(image, 0, 0, canvas.clientWidth, canvas.clientHeight)
+        strokeHistoryRef.current = cloneStrokeHistory(item.strokes ?? [])
+      }
       setName(item.name)
       setOpenPanel(null)
       setMessage(`Loaded “${item.name}” · use Undo to return to the previous canvas`)
@@ -765,50 +996,144 @@ function CreateMode({ navigate, actionFor, lastMovement, onMovement, adaptation,
       return
     }
     setDrawMode(false)
+    setGazeMap(null)
+    gazeMapRef.current = null
+    lastRawGazeRef.current = null
+    pendingGazeOutlierRef.current = null
+    smoothedCursorRef.current = null
+    previousGazeRef.current = null
+    cursorRef.current?.classList.remove('is-visible', 'cursor-gaze')
+    setCursorSource(null)
     calibrationDataRef.current = []
-    setCalibrationHint('Look at the target, then capture each point')
+    setCalibrationHint('Look steadily at each target; capture collects multiple samples')
     setCalibrationCapture(false)
     setCalibrationIndex(0)
   }
   const captureTarget = () => {
     if (calibrationIndex === null || !cameraActiveRef.current) return
+    if (calibrationTimerRef.current !== null) window.clearTimeout(calibrationTimerRef.current)
     captureRef.current = true
     gazeSamplesRef.current = []
     setCalibrationCapture(true)
-    setCalibrationHint('Hold your gaze on the target…')
+    setCalibrationHint('Hold your gaze steady while multiple samples are collected…')
     calibrationTimerRef.current = window.setTimeout(() => {
       captureRef.current = false
       setCalibrationCapture(false)
-      const samples = gazeSamplesRef.current
-      if (samples.length < 8) {
-        setCalibrationHint('Not enough face samples. Check lighting and try this target again.')
+      const summary = summarizeGazeSamples(gazeSamplesRef.current)
+      if (!summary) {
+        setCalibrationHint('Samples were missing or unstable. Hold the target steadily and recapture this point.')
         return
       }
-      const raw = {
-        x: samples.reduce((sum, point) => sum + point.x, 0) / samples.length,
-        y: samples.reduce((sum, point) => sum + point.y, 0) / samples.length,
-      }
-      const target = calibrationTargets[calibrationIndex]
-      calibrationDataRef.current = [...calibrationDataRef.current, { raw, target }]
+      const target = GAZE_CALIBRATION_TARGETS[calibrationIndex]
+      calibrationDataRef.current = [...calibrationDataRef.current, { raw: summary.point, target }]
       const nextIndex = calibrationIndex + 1
-      if (nextIndex < calibrationTargets.length) {
+      if (nextIndex < GAZE_CALIBRATION_TARGETS.length) {
         setCalibrationIndex(nextIndex)
-        setCalibrationHint('Target recorded · continue to the next point')
+        setCalibrationHint(
+          `${summary.sampleCount} stable samples · continue to the next target`,
+        )
         return
       }
       const fitted = fitGazeMap(calibrationDataRef.current)
-      if (!fitted) {
+      if (!fitted || fitted.rmse > 0.1 || fitted.maxError > 0.2) {
         setCalibrationIndex(null)
-        setCalibrationHint('Calibration was unstable. Try again with steady lighting and head position.')
-        setMessage('Gaze calibration could not estimate a stable screen mapping')
+        setCalibrationHint('')
+        setMessage(fitted
+          ? `Calibration fit residual too high (${Math.round(fitted.rmse * 100)}% RMS, max ${Math.round(fitted.maxError * 100)}%). Recalibrate.`
+          : 'Gaze calibration could not estimate a stable screen mapping')
         return
       }
       setGazeMap(fitted)
       gazeMapRef.current = fitted
       setCalibrationIndex(null)
       setCalibrationHint('')
-      setMessage('Gaze calibrated · cursor-only mode is active')
-    }, 1700)
+      setMessage(`Calibration fit ${Math.round(fitted.rmse * 100)}% RMS · approximate cursor-only mode`)
+    }, 2200)
+  }
+
+  const finishChallengeRound = () => {
+    if (challengeRoundDoneRef.current) return
+    setDrawMode(false)
+    const total = challengeHitsRef.current + challengeMissesRef.current
+    const metrics: ChallengeMetrics = {
+      coverage: challengeCellsRef.current.size / 64,
+      accuracy: total ? challengeHitsRef.current / total : 0,
+      elapsedSeconds: Math.min(45, Math.floor((Date.now() - challengeStartedAtRef.current) / 1000)),
+      misses: challengeMissesRef.current,
+    }
+    const next = adaptChallenge(
+      challengeStateRef.current,
+      metrics,
+      challengeStrainRef.current,
+      Date.now(),
+    )
+    challengeStateRef.current = next
+    setChallengeState(next)
+    setLastChallengeMetrics(metrics)
+    setChallengeRoundDone(true)
+    challengeRoundDoneRef.current = true
+    setMessage(metrics.coverage >= 0.7
+      ? 'Round complete · difficulty changes only when performance and signal status justify it'
+      : 'Round ended · keep the target or take a break; no penalty')
+  }
+  finishChallengeRef.current = finishChallengeRound
+
+  const resetChallengeRound = () => {
+    challengeCellsRef.current = new Set()
+    challengeHitsRef.current = 0
+    challengeMissesRef.current = 0
+    setChallengeCells(0)
+    setChallengeHits(0)
+    setChallengeMisses(0)
+    setChallengeElapsed(0)
+    setChallengeRoundDone(false)
+    challengeRoundDoneRef.current = false
+    challengeStartedAtRef.current = Date.now()
+    strokeOpenRef.current = false
+    previousGazeRef.current = null
+    previousPointerRef.current = null
+  }
+  const resetChallenge = () => {
+    const next = { ...initialChallengeState, lastDifficultyChangeAt: Date.now() }
+    challengeStateRef.current = next
+    setChallengeState(next)
+    setLastChallengeMetrics(null)
+    resetChallengeRound()
+    setMessage('Challenge reset · start again from round one')
+  }
+  const enterPlayMode = () => {
+    setDrawMode(false)
+    setArtAnimating(false)
+    setStudioMode('play')
+    studioModeRef.current = 'play'
+    challengeSimulationRef.current = false
+    setChallengeSimulation(false)
+    challengeStrainRef.current = 'unknown'
+    setStrainState('unknown')
+    const next = { ...initialChallengeState, lastDifficultyChangeAt: Date.now() }
+    challengeStateRef.current = next
+    setChallengeState(next)
+    setLastChallengeMetrics(null)
+    resetChallengeRound()
+  }
+  const enterCreateMode = () => {
+    setDrawMode(false)
+    setStudioMode('create')
+    studioModeRef.current = 'create'
+  }
+  const setChallengeStrain = (value: string) => {
+    if (value === 'unknown') {
+      setChallengeSimulation(false)
+      challengeSimulationRef.current = false
+      challengeStrainRef.current = 'unknown'
+      setStrainState('unknown')
+      return
+    }
+    const next = value.replace('demo_', '') as StrainState
+    setChallengeSimulation(true)
+    challengeSimulationRef.current = true
+    challengeStrainRef.current = next
+    setStrainState(next)
   }
 
   const selectColor = (next: string) => {
@@ -818,6 +1143,39 @@ function CreateMode({ navigate, actionFor, lastMovement, onMovement, adaptation,
   }
 
   return <section className="experience-page create-page gaze-studio">
+    {studioMode === 'play' && <div className="play-challenge-panel">
+      <div className="play-challenge-heading"><span><Target size={14} /> PLAY · ROUND {challengeState.round}</span><button data-gaze-selectable="true" onClick={enterCreateMode}>EXIT PLAY</button></div>
+      <label className="strain-selector">SIGNAL / CHALLENGE INPUT
+        <select value={challengeSimulation ? `demo_${strainState}` : 'unknown'} onChange={(event) => setChallengeStrain(event.target.value)}>
+          <option value="unknown">Unavailable · difficulty holds</option>
+          <option value="demo_low">DEMO SIMULATION · low (manual)</option>
+          <option value="demo_moderate">DEMO SIMULATION · moderate (manual)</option>
+          <option value="demo_high">DEMO SIMULATION · high (manual)</option>
+        </select>
+      </label>
+      <div className="play-sensor-status"><i />{challengeSimulation ? `DEMO SIMULATION · USER-SET ${strainState.toUpperCase()}` : 'EEG UNAVAILABLE · NO LIVE HEADSET'}</div>
+      <div className="play-metrics"><span>Coverage <b>{Math.round(challengeCells / 64 * 100)}%</b></span><span>Accuracy <b>{challengeHits + challengeMisses ? Math.round(challengeHits / (challengeHits + challengeMisses) * 100) : 0}%</b></span><span>Misses <b>{challengeMisses}</b></span><span>Time <b>{Math.max(0, 45 - challengeElapsed)}s</b></span></div>
+      <div className="play-progress"><i style={{ width: `${Math.min(100, challengeCells / 64 * 100)}%` }} /></div>
+      {lastChallengeMetrics && <p className="play-last-round">Last round · {Math.round(lastChallengeMetrics.coverage * 100)}% coverage · {Math.round(lastChallengeMetrics.accuracy * 100)}% accuracy</p>}
+      <div className="play-round-actions">
+        {challengeRoundDone
+          ? <button className="play-round-button" onClick={resetChallengeRound}>START ROUND {challengeState.round}</button>
+          : <button className="play-round-button" disabled={!canCompleteChallenge(challengeCells / 64)} onClick={finishChallengeRound}>COMPLETE ROUND · 70% COVERAGE</button>}
+        <button className="play-reset-button" onClick={resetChallenge}>RESET CHALLENGE</button>
+      </div>
+      <small className="play-difficulty-note">
+        Target {Math.round(challengeState.targetScale * 100)}% of the shorter canvas side · {challengeSimulation
+          ? strainState === 'low' ? 'DEMO low shrinks only after repeated successful rounds.'
+            : strainState === 'high' ? 'DEMO high grows the target gradually.'
+              : 'DEMO moderate holds difficulty.'
+          : 'EEG unavailable; unknown signal holds difficulty.'}
+      </small>
+    </div>}
+    {studioMode === 'play' && !challengeRoundDone && <div
+      className="play-target"
+      style={{ width: `${Math.min(viewport.width, viewport.height) * challengeState.targetScale}px`, height: `${Math.min(viewport.width, viewport.height) * challengeState.targetScale}px` }}
+      aria-label="Green painting target"
+    ><span>{Math.round(challengeCells / 64 * 100)}%</span></div>}
     <canvas
       className="studio-paint-canvas"
       ref={canvasRef}
@@ -833,22 +1191,40 @@ function CreateMode({ navigate, actionFor, lastMovement, onMovement, adaptation,
         }
       }}
     />
+    <canvas className={`studio-animation-canvas${artAnimating ? ' is-active' : ''}`} ref={animationCanvasRef} aria-hidden="true" />
     <div className="studio-topbar">
-      <button className="studio-back" onClick={() => navigate('explore')} aria-label="Back to worlds"><ArrowLeft size={17} /><span>WORLDS</span></button>
+      <button className="studio-back" data-gaze-selectable="true" onClick={() => navigate('explore')} aria-label="Back to worlds"><ArrowLeft size={17} /><span>WORLDS</span></button>
       <label className="studio-name"><ImageIcon size={14} /><input value={name} onChange={(event) => setName(event.target.value)} placeholder="Name this artwork" maxLength={34} aria-label="Artwork name" /></label>
-      <span className={cameraActive ? 'studio-signal signal-active' : 'studio-signal'}><i />{cameraActive ? faceDetected ? gazeMap ? 'GAZE CALIBRATED' : 'FACE DETECTED · CALIBRATE' : 'CAMERA ON · FINDING FACE' : 'GAZE OFF'}</span>
-      <button className="studio-icon-button" onClick={redo} aria-label="Redo" title="Redo"><Redo2 size={16} /></button>
-      <button className={openPanel === 'gallery' ? 'studio-icon-button selected' : 'studio-icon-button'} onClick={() => setOpenPanel(openPanel === 'gallery' ? null : 'gallery')} aria-label="Open saved gallery" title="Gallery"><Images size={16} /></button>
+      <span className={cameraActive ? 'studio-signal signal-active' : 'studio-signal'}><i />{cameraActive ? faceDetected ? gazeMap ? `GAZE FIT · ${Math.round(gazeMap.rmse * 100)}%` : 'FACE DETECTED · CALIBRATE' : 'CAMERA ON · FINDING FACE' : 'CAMERA OFF'}</span>
+      <button className={studioMode === 'play' ? 'studio-mode-button selected' : 'studio-mode-button'} data-gaze-selectable="true" onClick={studioMode === 'play' ? enterCreateMode : enterPlayMode} aria-label={studioMode === 'play' ? 'Switch to Create Mode' : 'Enter Play Mode'}>
+        {studioMode === 'play' ? <WandSparkles size={14} /> : <Target size={14} />}{studioMode === 'play' ? 'CREATE' : 'PLAY'}
+      </button>
+      <button className="studio-icon-button" data-gaze-selectable="true" onClick={redo} aria-label="Redo" title="Redo"><Redo2 size={16} /></button>
+      <button className={openPanel === 'gallery' ? 'studio-icon-button selected' : 'studio-icon-button'} data-gaze-selectable="true" onClick={() => setOpenPanel(openPanel === 'gallery' ? null : 'gallery')} aria-label="Open saved gallery" title="Gallery"><Images size={16} /></button>
     </div>
     <div className="studio-gaze-tools">
-      <WebcamInput onMovement={onMovement} onStatus={handleCameraStatus} onGaze={handleGaze} compact />
-      <button className="studio-calibrate" onClick={beginCalibration} disabled={!cameraActive}><Crosshair size={15} /> CALIBRATE</button>
+      <WebcamInput onMovement={onMovement} onStatus={handleCameraStatus} onGaze={handleGaze} onFaceDetected={handleFaceDetected} onGesture={focusGestureControl} sensitivity={gestureSensitivity} compact />
+      <button className="studio-calibrate" data-gaze-selectable="true" onClick={beginCalibration} disabled={!cameraActive}><Crosshair size={15} /> CALIBRATE</button>
+      <button className="studio-calibrate diagnostics-toggle" aria-pressed={diagnosticsOpen} onClick={() => setDiagnosticsOpen(!diagnosticsOpen)}>DIAGNOSTICS</button>
     </div>
+    <div className="studio-onboarding"><strong>FIRST TIME?</strong> Enable camera · calibrate all 9 targets · draw with gaze, mouse, or hold Space. Blink moves focus; hold a wink to select.</div>
+    {diagnosticsOpen && <aside className="gaze-diagnostics" aria-live="polite">
+      <strong>GAZE DIAGNOSTICS · LOCAL ONLY</strong>
+      <span>Face: {faceDetected ? 'DETECTED' : cameraActive ? 'NOT DETECTED' : 'CAMERA OFF'}</span>
+      <span>Gaze features: {diagnosticGaze ? `${diagnosticGaze.x.toFixed(3)}, ${diagnosticGaze.y.toFixed(3)}` : '—'}</span>
+      <span>Screen mapping: {diagnosticGaze && gazeMap ? (() => { const point = mapGazeToScreen(diagnosticGaze, gazeMap); return `${point.x.toFixed(3)}, ${point.y.toFixed(3)}` })() : 'NOT CALIBRATED'}</span>
+      <span>Calibration: {gazeMap ? `FIT · RMS ${(gazeMap.rmse * 100).toFixed(1)}%` : calibrationIndex !== null ? `${calibrationIndex + 1} / 9` : 'NOT CALIBRATED'}</span>
+      <span>Canvas cursor: {diagnosticCursor ? `${Math.round(diagnosticCursor.x)}px, ${Math.round(diagnosticCursor.y)}px` : '—'}</span>
+      <span>Gesture: {faceDetected ? gestureStatus : 'NO FACE / NEUTRAL'}</span>
+      <label>Gesture sensitivity · {gestureSensitivity}<input aria-label="Gesture sensitivity" type="range" min="1" max="10" value={gestureSensitivity} onChange={(event) => setGestureSensitivity(Number(event.target.value))} /></label>
+      <small>Preview is mirrored for comfort; landmark coordinates are not mirrored. Recalibrate if the preview and cursor disagree.</small>
+    </aside>}
+    <div className="gesture-readout" aria-live="polite"><i /> FACIAL GESTURE · {gestureStatus}</div>
     <div className={`studio-brush-cursor brush-${brush}${painting ? ' is-painting' : ''}${cursorSource ? ' is-visible' : ''}`} ref={cursorRef} aria-hidden="true"><i /></div>
     <div className="studio-bottom-dock">
       <div className="studio-toolbar" role="toolbar" aria-label="Creative controls">
         <div className="studio-control-wrap">
-          <button className={openPanel === 'color' ? 'studio-control is-open' : 'studio-control'} onClick={() => setOpenPanel(openPanel === 'color' ? null : 'color')} aria-expanded={openPanel === 'color'}>
+          <button className={openPanel === 'color' ? 'studio-control is-open' : 'studio-control'} data-gaze-selectable="true" onClick={() => setOpenPanel(openPanel === 'color' ? null : 'color')} aria-expanded={openPanel === 'color'}>
             <i className="active-color" style={{ backgroundColor: color }} /><span>COLOR</span><small>{color.toUpperCase()}</small>
           </button>
           {openPanel === 'color' && <div className="studio-popover color-popover">
@@ -858,7 +1234,7 @@ function CreateMode({ navigate, actionFor, lastMovement, onMovement, adaptation,
           </div>}
         </div>
         <div className="studio-control-wrap">
-          <button className={openPanel === 'brush' ? 'studio-control is-open' : 'studio-control'} onClick={() => setOpenPanel(openPanel === 'brush' ? null : 'brush')} aria-expanded={openPanel === 'brush'}>
+          <button className={openPanel === 'brush' ? 'studio-control is-open' : 'studio-control'} data-gaze-selectable="true" onClick={() => setOpenPanel(openPanel === 'brush' ? null : 'brush')} aria-expanded={openPanel === 'brush'}>
             <span className={`brush-preview brush-${brush}`}><i /></span><span>BRUSH</span><small>{brush.toUpperCase()}</small>
           </button>
           {openPanel === 'brush' && <div className="studio-popover brush-popover">
@@ -869,14 +1245,18 @@ function CreateMode({ navigate, actionFor, lastMovement, onMovement, adaptation,
           </div>}
         </div>
         <label className="studio-size"><span>SIZE <b>{brushSize}</b></span><input type="range" min="2" max="40" value={brushSize} onChange={(event) => setBrushSize(Number(event.target.value))} aria-label="Brush size" /></label>
-        <button className={painting ? 'studio-control draw-control is-drawing' : 'studio-control draw-control'} onClick={() => setDrawMode(!painting)} aria-pressed={painting} title="G toggles paint; Escape pauses">
+        <button className={painting ? 'studio-control draw-control is-drawing' : 'studio-control draw-control'} data-gaze-selectable="true" onClick={() => setDrawMode(!painting)} aria-pressed={painting} title="Hold Space or mouse to paint; G toggles paint">
           {painting ? <Pause size={17} /> : <Play size={17} />}<span>{painting ? 'PAUSE' : 'DRAW'}</span><small>{cameraActive && gazeMap ? painting ? 'GAZE PAINT' : 'GAZE CURSOR' : painting ? 'MOUSE PAINT' : 'MOUSE READY'}</small>
         </button>
-        <button className="studio-control" onClick={undo} title="Undo"><Undo2 size={17} /><span>UNDO</span></button>
-        <button className="studio-control" onClick={clearCanvas} title="Clear canvas"><Trash2 size={17} /><span>CLEAR</span></button>
-        <button className="studio-control save-control" onClick={saveArt} title="Save PNG and add to gallery"><Save size={17} /><span>SAVE</span></button>
+        <button className="studio-control" data-gaze-selectable="true" onClick={() => setArtAnimating(!artAnimating)} title="Play or stop the living-art animation">
+          {artAnimating ? <Pause size={17} /> : <Play size={17} />}<span>{artAnimating ? 'STOP ART' : 'PLAY ART'}</span>
+        </button>
+        <button className="studio-control" data-gaze-selectable="true" onClick={undo} title="Undo"><Undo2 size={17} /><span>UNDO</span></button>
+        <button className="studio-control" data-gaze-selectable="true" onClick={redo} title="Redo"><Redo2 size={17} /><span>REDO</span></button>
+        <button className="studio-control" data-gaze-selectable="true" onClick={clearCanvas} title="Clear canvas"><Trash2 size={17} /><span>CLEAR</span></button>
+        <button className="studio-control save-control" data-gaze-selectable="true" onClick={saveArt} title="Save PNG and add artwork and stroke history to gallery"><Save size={17} /><span>SAVE</span></button>
       </div>
-      <div className="studio-adapt-note"><Sparkles size={12} /> NEURO-ADAPT {adaptation.difficulty.toUpperCase()} · {adaptation.difficulty === 'supportive' ? 'Try one brush at a time' : adaptation.difficulty === 'challenging' ? 'Try a new brush and color' : 'Your tools stay yours'} · EEG CURSOR NOT CONNECTED <span>G · DRAW/PAUSE&nbsp;&nbsp; ESC · PAUSE&nbsp;&nbsp; A/WINK · DRAW&nbsp;&nbsp; SPACE · COLOR&nbsp;&nbsp; S · BRUSH</span></div>
+      <div className="studio-adapt-note"><Sparkles size={12} /> {studioMode === 'play' ? `ROUND ${challengeState.round} · ${challengeSimulation ? `DEMO ${strainState.toUpperCase()}` : 'STRAIN UNKNOWN'}` : `NEURO-ADAPT ${adaptation.difficulty.toUpperCase()} · ${adaptation.difficulty === 'supportive' ? 'Try one brush at a time' : adaptation.difficulty === 'challenging' ? 'Try a new brush and color' : 'Your tools stay yours'}`} · EEG NOT CONNECTED <span>SPACE · HOLD TO DRAW&nbsp;&nbsp; ESC · PAUSE&nbsp;&nbsp; BLINK · NEXT CONTROL&nbsp;&nbsp; WINK · SELECT</span></div>
     </div>
     <div className="studio-message" role="status">{message || (gazeMap ? 'Gaze cursor only · drawing requires an intentional action' : 'Enable gaze for eye control · mouse draws when DRAW is active')}</div>
     {openPanel === 'gallery' && <div className="studio-gallery-popover">
@@ -884,9 +1264,9 @@ function CreateMode({ navigate, actionFor, lastMovement, onMovement, adaptation,
       {gallery.length === 0 ? <p>No saved artwork yet.</p> : gallery.map((item, index) => <button key={`${item.name}-${index}`} className="gallery-saved-item" onClick={() => loadArt(item)}><img src={item.image} alt="" /><span><strong>{item.name}</strong><small>{item.date}</small></span><Download size={14} onClick={(event) => { event.stopPropagation(); downloadImage(item.image, `${item.name}.png`) }} /></button>)}
     </div>}
     {calibrationIndex !== null && <div className="gaze-calibration">
-      <div className="calibration-instructions"><span>WEBCAM GAZE · CALIBRATION {calibrationIndex + 1} / 5</span><p>{calibrationHint || 'Look at the target and capture when ready.'}</p><small>Approximate gaze estimation only. Keep your head steady and use even lighting.</small></div>
-      <div className={calibrationCapture ? 'calibration-target is-capturing' : 'calibration-target'} style={{ left: `${calibrationTargets[calibrationIndex].x * 100}%`, top: `${calibrationTargets[calibrationIndex].y * 100}%` }}><i /><span>{calibrationTargets[calibrationIndex].label}</span></div>
-      <div className="calibration-actions"><button onClick={captureTarget} disabled={calibrationCapture || !cameraActive}>{calibrationCapture ? 'CAPTURING…' : `CAPTURE ${calibrationTargets[calibrationIndex].label}`}</button><button onClick={() => { captureRef.current = false; if (calibrationTimerRef.current !== null) window.clearTimeout(calibrationTimerRef.current); setCalibrationIndex(null); setCalibrationCapture(false) }}>CANCEL</button></div>
+      <div className="calibration-instructions"><span>WEBCAM GAZE · CALIBRATION {calibrationIndex + 1} / {GAZE_CALIBRATION_TARGETS.length}</span><p>{calibrationHint || 'Look at the target and capture when ready.'}</p><small>Approximate gaze estimation only. Keep your head steady and use even lighting.</small></div>
+      <div className={calibrationCapture ? 'calibration-target is-capturing' : 'calibration-target'} style={{ left: `${GAZE_CALIBRATION_TARGETS[calibrationIndex].x * 100}%`, top: `${GAZE_CALIBRATION_TARGETS[calibrationIndex].y * 100}%` }}><i /><span>{GAZE_CALIBRATION_TARGETS[calibrationIndex].label}</span></div>
+      <div className="calibration-actions"><button onClick={captureTarget} disabled={calibrationCapture || !cameraActive}>{calibrationCapture ? 'CAPTURING…' : `CAPTURE ${GAZE_CALIBRATION_TARGETS[calibrationIndex].label}`}</button><button onClick={() => { captureRef.current = false; if (calibrationTimerRef.current !== null) window.clearTimeout(calibrationTimerRef.current); setCalibrationIndex(null); setCalibrationCapture(false) }}>CANCEL</button></div>
     </div>}
   </section>
 }

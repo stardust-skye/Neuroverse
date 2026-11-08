@@ -1,0 +1,131 @@
+{
+  "experiment": "UAB N-back task-condition classification",
+  "status": "baseline established; foundation-model and EEGNet experiments not run",
+  "label_interpretation": {
+    "classes": ["low", "medium", "high"],
+    "source_conditions": {
+      "low": "N-back task 1: position 1-back",
+      "medium": "N-back task 2: arithmetic 1-back (dataset documentation calls this medium)",
+      "high": "N-back task 3: dual arithmetic 2-back"
+    },
+    "caveat": "These are dataset task-condition labels, not direct measurements of an individual's psychological workload or stress. The README does not define numeric phase IDs; the existing pipeline presumes phase 2 is active."
+  },
+  "dataset": {
+    "source": "workload_dataset/data_n_back_test/eeg/eeg.parquet",
+    "participants": 16,
+    "windows": 6063,
+    "window_seconds": 10,
+    "class_counts": {
+      "low": 1996,
+      "medium": 2017,
+      "high": 2050
+    },
+    "channels": [
+      "AF3",
+      "F7",
+      "F3",
+      "FC5",
+      "T7",
+      "P7",
+      "O1",
+      "O2",
+      "P8",
+      "T8",
+      "FC6",
+      "F4",
+      "F8",
+      "AF4"
+    ],
+    "sampling_rate_hz": {
+      "timestamp_estimate": 126.9,
+      "pipeline_declared": 128
+    },
+    "split": {
+      "method": "5-fold StratifiedGroupKFold",
+      "group": "participant",
+      "random_seed": 42,
+      "test_participants_per_fold": [4, 3, 3, 3, 3],
+      "notes": "Each participant is kept within a single fold. Metrics below are pooled out-of-fold results, not a separately pre-registered final test."
+    },
+    "class_balancing": "No class reweighting is reported; class counts are nearly balanced."
+  },
+  "environment": {
+    "python_torch": "2.7.0+cpu",
+    "torch_cuda_available": false,
+    "gpu_detected": "NVIDIA GeForce RTX 3050, 4 GB VRAM; not usable by the installed CPU-only PyTorch",
+    "ram_total_gb": 15.7,
+    "ram_free_at_inspection_gb": 5.2,
+    "checkpoint_downloaded": false
+  },
+  "models": {
+    "gradient_boosting_baseline": {
+      "status": "completed",
+      "source": "ml/reports/model_evaluation.json",
+      "model_load_smoke_test": "passed; unchanged ml/models/workload_classifier.joblib loaded successfully",
+      "selection": "Selected by highest grouped cross-validation macro F1 among the existing classical baselines.",
+      "metrics": {
+        "accuracy": 0.47550717466600695,
+        "balanced_accuracy": 0.4762877538091286,
+        "precision_macro": 0.4632637860106748,
+        "recall_macro": 0.4762877538091286,
+        "f1_macro": 0.4677954655290521,
+        "confusion_matrix": [
+          [1354, 393, 249],
+          [543, 583, 891],
+          [404, 700, 946]
+        ],
+        "confusion_matrix_order": ["low", "medium", "high"],
+        "per_class": {
+          "low": {
+            "precision": 0.5884398087787919,
+            "recall": 0.6783567134268537,
+            "f1": 0.6302071212473819
+          },
+          "medium": {
+            "precision": 0.3478520286396181,
+            "recall": 0.2890431333663857,
+            "f1": 0.3157324668291362
+          },
+          "high": {
+            "precision": 0.4534995206136146,
+            "recall": 0.46146341463414636,
+            "f1": 0.4574468085106383
+          }
+        },
+        "training_time_seconds": null,
+        "inference_time_ms_per_window": null
+      }
+    },
+    "eegnet": {
+      "status": "not_run",
+      "reason": "No EEGNet implementation or raw-signal preprocessing/evaluation path exists in the current pipeline."
+    },
+    "LaBraM_frozen": {
+      "status": "not_run",
+      "checkpoint_loaded": false,
+      "compatibility": "Unverified against the official implementation's channel embedding and input path. Its published preprocessing uses 200 Hz, microvolt-scale EEG, 0.1-75 Hz filtering, and a 50 Hz notch; a valid exact channel mapping and raw-signal conversion have not been implemented.",
+      "metrics": null
+    },
+    "EEGPT_frozen": {
+      "status": "not_run",
+      "checkpoint_loaded": false,
+      "compatibility": "The official 58-channel, 256 Hz, 4-second model exposes named channel IDs that include all 14 Emotiv channel names, so a no-fabrication subset is possible. Resampling, input units/preprocessing, official checkpoint loading, and inference have not been validated.",
+      "metrics": null
+    },
+    "BIOT_frozen": {
+      "status": "not_run",
+      "checkpoint_loaded": false,
+      "compatibility": "The available 16-channel checkpoint expects a named bipolar TCP montage. The UAB files provide 14 Emotiv electrode channels, not that montage; missing derivations will not be synthesized or duplicated.",
+      "metrics": null
+    }
+  },
+  "experiment_stages": {
+    "stage_1_baseline": "completed; existing grouped-CV metrics captured",
+    "stage_2_checkpoint_smoke_test": "not_run; no pretrained model was loaded",
+    "stage_3_frozen_feature_extraction": "not_run",
+    "stage_4_lightweight_head": "not_run",
+    "stage_5_comparison": "not_run",
+    "stage_6_limited_fine_tuning": "not_run"
+  },
+  "conclusion": "No claim about pretrained-model improvement is supported. Preserve the existing production model; further work requires a validated raw-signal preprocessing and model-input mapping, plus a bounded official-checkpoint smoke test."
+}
