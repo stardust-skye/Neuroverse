@@ -1,0 +1,35 @@
+{
+  "dataset": "BNCI Horizon 013-2015 (Chavarriaga & Mill\u00e1n 2010), via MOABB BNCI2015_013",
+  "channels": [
+    "Fz",
+    "F3",
+    "F4",
+    "C3",
+    "C4",
+    "Pz"
+  ],
+  "features": "Instinct live ErrP features (1-10 Hz, 4 post-onset windows), shrinkage LDA",
+  "subjects": 6,
+  "trials": 6418,
+  "within_person_balanced_accuracy": 0.722,
+  "within_person_by_subject": {
+    "1": 0.757,
+    "2": 0.74,
+    "3": 0.777,
+    "4": 0.671,
+    "5": 0.726,
+    "6": 0.658
+  },
+  "cross_person_balanced_accuracy": 0.613,
+  "cross_person_by_subject": {
+    "1": 0.605,
+    "2": 0.644,
+    "3": 0.657,
+    "4": 0.536,
+    "5": 0.635,
+    "6": 0.602
+  },
+  "chance": 0.5,
+  "generated": "2026-11-08 01:19",
+  "note": "Single-trial accuracy on a lab cursor task, not on reading text. Different headset and montage."
+}

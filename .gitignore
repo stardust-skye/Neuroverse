@@ -10,3 +10,11 @@ ml/data/processed/
 ml/models/*.joblib
 ml/reports/heldout_predictions.parquet
 ml/reports/dataset_inspection.json
+
+# Instinct
+.env
+.venv/
+ml/instinct/data/
+ml/instinct/profiles/
+ml/instinct/recordings/
+ml/data/bnci/
