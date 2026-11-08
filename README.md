@@ -53,15 +53,16 @@ Horizontal gaze output is flipped by default for the current setup, after calibr
 
 ### Mindprint live EEG art
 
-Start the live bridge on the computer running the browser, with the eego LSL stream discoverable on the network:
+The `test_lsl_connection` diagnostic checks one batch and exits; it does not limit the headset stream. To forward ongoing batches, start the live bridge on the computer running the browser, with the eego LSL stream discoverable on the network:
 
 ```powershell
-.\venv\Scripts\python.exe -m ml.live.lsl_ws_bridge --name "EE225-020034-000943_on_BOOK-R5F4LN9527"
+.\venv\Scripts\python.exe -m pip install -r ml\requirements.txt
+.\venv\Scripts\python.exe -m ml.live.lsl_ws_bridge --name "EE225-020034-000345_on_DESKTOP-ET4GTF5"
 ```
 
-Open **MINDPRINT** in Create or Play. After about one second of valid samples, the art's shapes and colors respond to relative changes in the signal; **SAVE ART** downloads the current frame. The bridge defaults to `ws://localhost:8765`; set `VITE_MINDPRINT_EEG_URL` before starting Vite to use a different trusted bridge. Mindprint stops displaying and saving the artwork when samples become stale or the connection is lost. The bridge's explicitly named `SIMULATED` stream is rejected.
+Use the exact stream name printed by the diagnostic if it changes. Keep the bridge running and start the frontend separately with `npm run dev`. Open **MINDPRINT** in Create or Play. The first second establishes a session reference, so start with a comfortable relaxed face. Afterward, the art responds to signal amplitude and waveform changes in the latest half-second, updating about four times a second; **SAVE ART** downloads the current frame. The reference resets when the stream is lost or Mindprint is reopened. The bridge defaults to `ws://localhost:8765`; set `VITE_MINDPRINT_EEG_URL` before starting Vite to use a different trusted bridge. Mindprint stops displaying and saving the artwork when samples become stale or the connection is lost. The bridge's explicitly named `SIMULATED` stream is rejected.
 
-Mindprint is a procedural visualization, not a trained EEG-to-image model or a medical or emotional interpretation. It uses all channels supplied by the bridge because live channel types and labels have not yet been verified; auxiliary channels and artifacts may therefore affect the image. Verify stream identity and channel metadata with the device before use. The browser trusts the configured bridge and cannot independently prove that a stream is genuine EEG. Live hardware behavior has not been validated; no webcam data is used to generate Mindprint.
+The bridge forwards all raw channels and their supplied types to consumers. Mindprint uses only channels whose metadata type is `Referential` or `EEG`; unknown types and trigger channels are excluded, and a stream with no identified EEG channels is rejected. The provided diagnostic output reported 24 `Referential` channels and one `TRG` trigger at 1,000 Hz for this particular stream. Verify metadata again if the configuration changes. Mindprint is a procedural visualization, not a trained EEG-to-image model or a medical or emotional interpretation. Signal changes from movement or muscle activity may influence the art, but no particular action is identified and there is no guarantee every movement will produce a measurable response. The browser trusts the configured bridge and cannot independently prove that a stream is genuine EEG. Live hardware behavior has not been validated; no webcam data is used to generate Mindprint.
 
 For a first-time studio session: allow camera access in even lighting, select the crosshair, and capture each target while looking at it. Hold Space while checking cursor travel and alignment in **DIAGNOSTICS**. This software-only mapping check does not establish real-world tracking quality; controlled human validation is still required. If camera access is blocked, use the mouse; never treat pointer movement as webcam tracking.
 

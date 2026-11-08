@@ -1,67 +1,19 @@
 import { useEffect, useRef, useState } from 'react'
 import { ArrowLeft, Download, Sparkles } from 'lucide-react'
-import { mindprintFeatures, parseMindprintMeta, parseMindprintSamples } from './mindprintSignal'
-import type { MindprintFeatures, MindprintMeta } from './mindprintSignal'
+import { createMindprintBaseline, mindprintFeatures, mindprintVisuals, parseMindprintMeta, parseMindprintSamples, selectEegSamples } from './mindprintSignal'
+import type { MindprintBaseline, MindprintMeta, MindprintVisuals } from './mindprintSignal'
+import { renderMindprintArt } from './mindprintArt'
 
 type Props = { onClose: () => void }
 type Status = 'connecting' | 'waiting' | 'live' | 'invalid'
 const FRESH_MS = 2000
 
-function renderArt(canvas: HTMLCanvasElement, features: MindprintFeatures, time: number) {
-  const context = canvas.getContext('2d')
-  if (!context) return
-  const { width, height } = canvas
-  const cx = width / 2
-  const cy = height / 2
-  const radius = Math.min(width, height) * 0.35
-  const t = time / 1000
-  const hue = 210 + features.texture * 120 + features.balance * 90
-  context.clearRect(0, 0, width, height)
-  context.fillStyle = '#070916'
-  context.fillRect(0, 0, width, height)
-  const glow = context.createRadialGradient(cx, cy, 0, cx, cy, radius * 1.8)
-  glow.addColorStop(0, `hsla(${hue}, 75%, 31%, .37)`)
-  glow.addColorStop(.52, `hsla(${hue + 55}, 75%, 17%, .2)`)
-  glow.addColorStop(1, 'transparent')
-  context.fillStyle = glow
-  context.fillRect(0, 0, width, height)
-  context.globalCompositeOperation = 'screen'
-  for (let ring = 0; ring < 100; ring++) {
-    const phase = ring * .145 + t * .19
-    const base = radius * (.26 + ring / 155)
-    const ripple = .06 + features.variation * .36
-    context.beginPath()
-    for (let i = 0; i <= 160; i++) {
-      const angle = i * Math.PI * 2 / 160
-      const r = base * (1 + ripple * Math.sin(angle * 3 + phase) + .09 * Math.cos(angle * 7 - phase * .8))
-      const x = cx + Math.cos(angle + Math.sin(phase) * .12) * r * (1.1 + features.balance * .3)
-      const y = cy + Math.sin(angle) * r * .8
-      if (i === 0) context.moveTo(x, y)
-      else context.lineTo(x, y)
-    }
-    context.strokeStyle = `hsla(${hue + ring * .7}, 90%, ${69 + 13 * Math.sin(phase)}%, ${.055 + (ring % 9 === 0 ? .18 : .045)})`
-    context.lineWidth = Math.max(.7, width / 1600)
-    context.stroke()
-  }
-  for (let i = 0; i < 110; i++) {
-    const a = i * 2.39996 + t * (.02 + features.texture * .05)
-    const r = radius * (.2 + ((i * 73) % 103) / 100 * 1.5)
-    const x = cx + Math.cos(a) * r
-    const y = cy + Math.sin(a) * r * .72
-    const size = Math.max(.7, width / 1500) * (1 + (i % 5 === 0 ? 1.4 : 0))
-    context.fillStyle = `hsla(${hue + i}, 95%, 85%, ${.18 + .35 * (1 + Math.sin(t * 1.6 + i)) / 2})`
-    context.beginPath()
-    context.arc(x, y, size, 0, Math.PI * 2)
-    context.fill()
-  }
-  context.globalCompositeOperation = 'source-over'
-}
-
 export default function Mindprint({ onClose }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const backRef = useRef<HTMLButtonElement>(null)
   const saveRef = useRef<HTMLButtonElement>(null)
-  const featuresRef = useRef<MindprintFeatures | null>(null)
+  const visualsRef = useRef<MindprintVisuals | null>(null)
+  const displayedRef = useRef<MindprintVisuals | null>(null)
   const lastSampleRef = useRef(0)
   const [status, setStatus] = useState<Status>('connecting')
 
@@ -81,12 +33,15 @@ export default function Mindprint({ onClose }: Props) {
     let rows: number[][] = []
     let samplesSinceUpdate = 0
     let lastBatchTime: number | null = null
+    let baseline: MindprintBaseline | null = null
     const clear = (next: Status) => {
       meta = null
       rows = []
       samplesSinceUpdate = 0
       lastBatchTime = null
-      featuresRef.current = null
+      baseline = null
+      visualsRef.current = null
+      displayedRef.current = null
       lastSampleRef.current = 0
       setStatus(next)
     }
@@ -114,25 +69,39 @@ export default function Mindprint({ onClose }: Props) {
             if (!batch || typeof message.t0 !== 'number' || (lastBatchTime !== null && message.t0 <= lastBatchTime)) {
               console.warn('Invalid Mindprint EEG samples')
               rows = []
-              featuresRef.current = null
+              baseline = null
+              visualsRef.current = null
+              displayedRef.current = null
               setStatus('invalid')
               return
             }
             lastBatchTime = message.t0
             if (performance.now() - lastSampleRef.current > FRESH_MS) {
               rows = []
-              featuresRef.current = null
+              samplesSinceUpdate = 0
+              baseline = null
+              visualsRef.current = null
+              displayedRef.current = null
               setStatus('waiting')
             }
             lastSampleRef.current = performance.now()
-            rows.push(...batch)
+            rows.push(...selectEegSamples(batch, meta.eegIndices))
             const windowSize = Math.round(meta.srate * 2)
             if (rows.length > windowSize) rows = rows.slice(-windowSize)
             samplesSinceUpdate += batch.length
             if (rows.length >= Math.round(meta.srate) && samplesSinceUpdate >= meta.srate / 4) {
               samplesSinceUpdate = 0
-              featuresRef.current = mindprintFeatures(rows, meta.channels.length)
-              setStatus(featuresRef.current ? 'live' : 'invalid')
+              const window = rows.slice(-Math.max(50, Math.round(meta.srate * (baseline ? 0.5 : 1))))
+              const features = mindprintFeatures(window, meta.eegIndices.length)
+              if (features) {
+                baseline ??= createMindprintBaseline(features)
+                visualsRef.current = mindprintVisuals(features, baseline)
+              } else {
+                visualsRef.current = null
+                displayedRef.current = null
+                baseline = null
+              }
+              setStatus(features ? 'live' : 'invalid')
             }
           }
         } catch (error) {
@@ -149,9 +118,12 @@ export default function Mindprint({ onClose }: Props) {
     }
     connect()
     const timer = window.setInterval(() => {
-      if (featuresRef.current && performance.now() - lastSampleRef.current > FRESH_MS) {
-        featuresRef.current = null
+      if (visualsRef.current && performance.now() - lastSampleRef.current > FRESH_MS) {
+        visualsRef.current = null
+        displayedRef.current = null
+        baseline = null
         rows = []
+        samplesSinceUpdate = 0
         setStatus('waiting')
       }
     }, 250)
@@ -165,10 +137,22 @@ export default function Mindprint({ onClose }: Props) {
 
   useEffect(() => {
     let frame: number
+    let lastFrame: number | null = null
     const render = (time: number) => {
       const canvas = canvasRef.current
-      const features = featuresRef.current
-      if (canvas && features && performance.now() - lastSampleRef.current <= FRESH_MS) {
+      const target = visualsRef.current
+      if (canvas && target && performance.now() - lastSampleRef.current <= FRESH_MS) {
+        const previous = displayedRef.current ?? target
+        const alpha = lastFrame === null ? 1 : 1 - Math.exp(-Math.min(time - lastFrame, 100) / 250)
+        const blend = (from: number, to: number) => from + (to - from) * alpha
+        const displayed = {
+          activity: blend(previous.activity, target.activity),
+          hue: blend(previous.hue, target.hue),
+          ripple: blend(previous.ripple, target.ripple),
+          texture: blend(previous.texture, target.texture),
+          balance: blend(previous.balance, target.balance),
+        }
+        displayedRef.current = displayed
         const ratio = Math.min(window.devicePixelRatio || 1, 2)
         const width = Math.round(canvas.clientWidth * ratio)
         const height = Math.round(canvas.clientHeight * ratio)
@@ -176,8 +160,9 @@ export default function Mindprint({ onClose }: Props) {
           canvas.width = width
           canvas.height = height
         }
-        renderArt(canvas, features, time)
+        renderMindprintArt(canvas, displayed, time)
       }
+      lastFrame = time
       frame = requestAnimationFrame(render)
     }
     frame = requestAnimationFrame(render)
