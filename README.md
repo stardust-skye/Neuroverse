@@ -1,6 +1,6 @@
 # Neuroverse
 
-Neuroverse is a local-first interactive entertainment demo. Explore a branching story, care for a digital moon sprite, or paint in a full-screen studio with mouse, keyboard, and optional webcam-based gaze estimation.
+Neuroverse is a local-first neuro-art demo with a canvas-first Create mode and an optional adaptive Play challenge. Paint with a mouse or use experimental webcam-based eye-gaze controls.
 
 ## Run locally
 
@@ -22,46 +22,71 @@ Neuroverse is a local-first interactive entertainment demo. Explore a branching 
 
 ## Inputs
 
-Keyboard simulation is always available:
+Keyboard simulation is available outside the canvas:
 
 | Key | Movement | Default action |
 | --- | --- | --- |
-| Space | Blink | Confirm / interact |
-| A | Wink | Switch / change |
-| S | Simulated jaw-clench event | Special action (never webcam-inferred) |
+| Space | Blink | Navigate / interact |
+| A | Wink | Select |
 | R | Rest | Return to neutral |
 
-Keyboard shortcuts are ignored while typing in an input, textarea, or select. Controls work in each experience and can also be tested in the setup screen or developer panel (`Ctrl+Shift+D`). Movement-to-action mappings can be changed on the setup screen and are saved in local storage.
+Inside Create and Play, the Color control is the initial gesture selection; blink to move to the next control and wink to select it. Calibrate eye gaze, then hold **Space** and look where you want to draw; release Space to stop. Mouse drawing remains available independently. Keyboard shortcuts are ignored while typing in an input, textarea, or select.
 
-Webcam mode is optional. Select it in setup and explicitly enable the camera; grant browser permission when prompted. The face-landmark task and WASM runtime are fetched from their published hosting URLs, so webcam mode needs an internet connection the first time it loads. Camera frames are processed in the browser, are not recorded, and are not sent to an application backend. Eye closure is recognized as discrete events: bilateral blink, left wink, and right wink. The thresholds and timing are experimental; real-person validation is still required. Webcam jaw-clench inference is disabled because mouth opening is not a reliable clench signal. Keyboard and mouse controls remain available if camera access or model loading fails.
+Create also has an opt-in receiver prepared for a future validated live EEG gesture model. With a fresh good-quality prediction, blink and wink predictions take priority over webcam gestures, and holding a detected jaw clench enables gaze drawing until release. A neutral jaw sample is required before starting, and drawing stops if the prediction becomes stale or the connection is lost. Gaze calibration and camera tracking are still required to position the brush. If predictions are unavailable, webcam gestures and Space drawing work as before without a fallback notice.
 
-EEG mode is explicitly marked as coming soon. The project does not claim or simulate an EEG hardware connection.
+**The raw LSL bridge and existing model do not produce these gesture predictions**, and EEG gesture control has not been validated with ANT hardware. To connect a separately validated model and quality pipeline, set `VITE_GESTURE_EEG_URL` to its trusted WebSocket endpoint before starting Vite. It must send continuously, at least several times per second, JSON snapshots such as `{"type":"live_gestures","source":"live","quality":"good","timestamp":1730000000000,"blinkCount":0,"winkCount":0,"jawClenched":false}`. The Unix timestamp is in milliseconds; the nonnegative integer blink and wink counters increase once per recognized gesture and remain monotonic for the connection. The first snapshot establishes the baseline and does not trigger a gesture. Snapshots older than 1.5 seconds, malformed or poor-quality data, counter regressions and disconnections release EEG control. This contract does not validate the connected model or prove input provenance.
+
+The app requests webcam permission automatically; allow access in the browser. The face-landmark task and WASM runtime are fetched from their published hosting URLs, so webcam mode needs an internet connection the first time it loads. Camera frames are processed in the browser, are not recorded, and are not sent to an application backend. Facial blink/wink and gaze detection are experimental; controlled human testing is still required. Webcam jaw-clench inference is disabled. The mirrored camera preview is hidden unless **DIAGNOSTICS** is open. Mouse drawing remains available if camera access or model loading fails.
+
+EEG-based workload inference is explicitly marked as coming soon. Mindprint separately visualizes live raw EEG without claiming to infer emotions or workload.
 
 ## Experiences and persistence
 
-- **The Last Signal:** A playable branching story with multiple endings.
-- **Miso:** A pet with needs, levels, reactions, and a locally saved interaction history.
-- **Create Mode:** A full-screen canvas with five distinct brushes, color palette, brush sizing, undo/redo, clear confirmation, high-resolution PNG export, and a locally saved gallery.
-- Pet progress, artwork, and input mappings are stored in the browser's local storage.
+- **Create:** A full-screen canvas with five brushes, color palette, brush sizing, undo/redo, clear confirmation, PNG export, and a locally saved gallery. Spray is the starting brush in both modes.
+- **Play:** A moving gaze-painting target with a score and a fading paint trail.
+- **Mindprint:** An evolving generative artwork driven by live EEG sample patterns, opened from the studio top bar.
+- Artwork and input settings are stored in browser local storage.
 
-In **Create Mode**, select **Enable Gaze** to request camera permission. The browser downloads the existing MediaPipe Face Landmarker assets, estimates eye direction locally, and asks for a nine-point calibration with repeated samples before showing a gaze cursor. The on-screen diagnostic panel reports face status, gaze features, normalized mapping, calibration residual, cursor coordinates, and gesture events. Calibration residuals are a fit check, not proof of real-world accuracy. The preview is mirrored for comfort; gaze features are estimated from the original, unmirrored camera coordinates and fitted directly to screen targets. The sensitivity slider changes the eye-closure threshold; a wink must remain closed for at least 350 ms to reduce accidental selections. Blink/wink distinction remains experimental and requires human verification. A recognized blink advances the highlighted control and a sustained wink selects it. Hold **Space** or the mouse button to draw; `G` toggles drawing, and `Escape` pauses. Losing the face pauses active drawing. Jaw-clench detection is disabled. Strokes retain ordered point/time/brush/color/size data with the artwork in the local gallery. **PLAY ART / STOP ART** draws its animation on a separate overlay canvas; stopping the animation leaves the original canvas unchanged.
+In **Create** or **Play**, select the crosshair calibration button. For each of the nine targets, press **Space** or **Capture**, then look at the target while the app records your eyes. Sampling begins after a short delay, so you have time to look back at the target; slow or noisy samples get extra time. If a point does not fit the others, the app asks you to retry that point. Play adaptation pauses during calibration. If calibration still fails, check that your eyes are visible, improve lighting, and retry. Hold Space to draw with the calibrated eye-gaze cursor; releasing it stops drawing. Tracking loss pauses drawing. The diagnostics panel reports face status, raw head-pose features, normalized gaze cursor position, and recognized gestures; it can also reveal the mirrored webcam preview. **PLAY ART / STOP ART** animates recorded spray and particle dots with shimmering glow and motion trails on an overlay without changing the saved canvas. Dots in older artwork saved before particle recording remain static.
 
-For a first-time studio session: allow camera access and use even lighting. Select **CALIBRATE** and, in order, fixate **center → top-left → top → top-right → right → bottom-right → bottom → bottom-left → left**, capturing each target only after holding your gaze steady. After fitting, open **DIAGNOSTICS**, repeat that same nine-target order, and check that screen/canvas cursor coordinates are left of center for left targets, right for right targets, above center for top targets, below for bottom targets, and near center for the center target. Recalibrate if any direction is reversed or inconsistent. If camera access is blocked or unavailable, use the mouse or hold **Space** to draw; do not treat fallback pointer movement as gaze input.
+Horizontal gaze output is flipped by default for the current setup, after calibration. If looking left moves the cursor right or vice versa, use the horizontal-flip button beside the calibration crosshair to switch direction. The choice is saved locally and applies in Create and Play; it does not change vertical gaze, the camera preview, or calibration samples.
 
-### Gaze validation checklist
+### Mindprint live EEG art
 
-- Automated: `npm run test:frontend` fits a synthetic nine-point calibration and checks that every target maps back to its normalized screen position; separate tests verify left/right, up/down, center, outlier rejection, and smoothing.
-- Human-required: enable gaze with a real person, hold the head comfortably still, and fixate each of the nine visible targets in turn. Record the displayed cursor position at each target; verify left/right and top/bottom ordering, center proximity, and that the preview, landmarks, gaze indicator, and painting cursor remain visually consistent. Repeat after recalibration. This real-person check has not yet been performed, so no real-world accuracy claim is made.
+Start the live bridge on the computer running the browser, with the eego LSL stream discoverable on the network:
 
-**Play Mode** is an optional painting challenge with a large, centered green target. Each round tracks 8×8 target coverage, sampled hit/miss accuracy, and elapsed time; manual completion requires 70% coverage. Difficulty changes only after a completed round: repeated successful rounds with the manually selected LOW demo condition can gradually shrink the target; manually selected HIGH demo can enlarge it; MODERATE or UNKNOWN holds difficulty. The application currently has no live EEG stream or validated live strain estimate, so the default status is **EEG unavailable** and difficulty holds. The explicitly labeled **DEMO SIMULATION** selector is a user-chosen test condition, not a sensor reading. **RESET CHALLENGE** restores the target and round counter. Keyboard (`Space`) and mouse drawing remain available. A real person must still validate gaze direction and control comfort.
+```powershell
+.\venv\Scripts\python.exe -m ml.live.lsl_ws_bridge --name "EE225-020034-000943_on_BOOK-R5F4LN9527"
+```
+
+Open **MINDPRINT** in Create or Play. After about one second of valid samples, the art's shapes and colors respond to relative changes in the signal; **SAVE ART** downloads the current frame. The bridge defaults to `ws://localhost:8765`; set `VITE_MINDPRINT_EEG_URL` before starting Vite to use a different trusted bridge. Mindprint stops displaying and saving the artwork when samples become stale or the connection is lost. The bridge's explicitly named `SIMULATED` stream is rejected.
+
+Mindprint is a procedural visualization, not a trained EEG-to-image model or a medical or emotional interpretation. It uses all channels supplied by the bridge because live channel types and labels have not yet been verified; auxiliary channels and artifacts may therefore affect the image. Verify stream identity and channel metadata with the device before use. The browser trusts the configured bridge and cannot independently prove that a stream is genuine EEG. Live hardware behavior has not been validated; no webcam data is used to generate Mindprint.
+
+For a first-time studio session: allow camera access in even lighting, select the crosshair, and capture each target while looking at it. Hold Space while checking cursor travel and alignment in **DIAGNOSTICS**. This software-only mapping check does not establish real-world tracking quality; controlled human validation is still required. If camera access is blocked, use the mouse; never treat pointer movement as webcam tracking.
+
+### Gaze and gesture validation checklist
+
+- Automated: `npm run test:frontend` checks gaze mapping, outlier rejection, smoothing, gesture timing, particle movement, stroke controls, and challenge behavior.
+- Human-required: with a real person, check gaze calibration, cursor travel for all four directions, face-loss pause, preview/landmark/cursor consistency, and controlled blink/wink trials. Repeat in the intended demo lighting. No controlled human validation is claimed.
+
+**Play Mode** has a green target and no rounds, timer, or coverage score. After calibration, hold Space and move the gaze cursor into or across the box; contact immediately adds one point, makes the next box slightly smaller, and moves it to another position. Paint fades away over two seconds and is not saved to the Create canvas. A configured, fresh live stress prediction takes precedence: sustained stress gradually enlarges the box, while relaxed predictions leave normal play unchanged. If a valid live prediction is unavailable, sustained eyebrow scrunching gradually enlarges the box instead. Mouse painting remains available but does not count toward gaze success. Entering Play again resets the box and score. Eyebrow movement is an experimental facial gesture, **not a measurement of stress**. Facial blendshape detection and gaze accuracy vary by person, lighting, and camera and have not been validated with real users.
+
+The eyebrow fallback responds after approximately 0.6 seconds of a sustained scowl and keeps growing the target until release or its maximum size. In **DIAGNOSTICS**, adjust **Play scowl threshold** lower for a gentler scowl, or higher if a relaxed face causes unwanted growth. This affects the camera fallback, not EEG priority.
+
+### Play live EEG integration status
+
+The EEG-first **receiver is prepared, but live EEG stress inference is not implemented or validated**. The eego LSL stream contains raw samples, not stress predictions. The existing trained model expects 140 features from 14-channel Emotiv precomputed band powers and predicts N-back task conditions; it cannot safely be fed the 24-channel 500 Hz ANT stream or presented as a stress classifier. See [the compatibility investigation](./ml/ant_neuro/reports/live-stream-model-compatibility.md). The raw LSL WebSocket bridge does not produce the prediction contract below.
+
+Once an independently validated compatible live model and signal-quality pipeline exist, explicitly configure the frontend at startup with `VITE_PLAY_EEG_SCORE_URL` pointing to its trusted WebSocket endpoint. It must send JSON objects such as `{"type":"live_stress","source":"live","quality":"good","state":"stressed","timestamp":1730000000000}`, where `timestamp` is the current Unix time in milliseconds and `state` is `stressed` or `relaxed`. Send updated predictions at least every five seconds. Stale, malformed, poor-quality, replay, and disconnected inputs cannot drive Play; the camera fallback is used instead. No endpoint is enabled by default, and merely connecting raw LSL samples does not enable EEG adaptation.
 
 ## Sensor architecture and current capability
 
-Facial gesture timing is implemented in `src/gestures.ts`; gaze math and calibration are in `src/gaze.ts`; challenge adaptation is separate in `src/challenge.ts`; and stroke history is in `src/strokes.ts`. The ANT Neuro CNT files are only locally inspected and annotated; the current recordings do not contain reviewed sample-level gesture labels. No EEG gesture classifier or live EEG adapter exists. The local FastAPI service supports recorded UAB workload replay only; it is not a live headset stream. `pylsl` and `mne_lsl` are not installed, and no LSL stream source was found in the repository. The frontend and backend explicitly distinguish the recorded replay from live input.
+Facial gesture timing is implemented in `src/gestures.ts`; gaze estimation and calibration are in `src/gaze.ts`; blink/wink actions are in `src/gestureController.ts`; challenge adaptation is in `src/challenge.ts`; and stroke history is in `src/strokes.ts`. The ANT Neuro CNT files are only locally inspected and annotated; the current recordings do not contain reviewed sample-level gesture labels. No EEG gesture classifier or live EEG adapter exists. The local FastAPI service supports recorded UAB workload replay only; it is not a live headset stream. The standalone LSL diagnostic below does not feed the application or its model. The frontend and backend explicitly distinguish recorded replay from live input.
 
 ### Hardware validation before a live demo
 
-Automated tests cover synthetic coordinate mapping and interaction rules, not a physical webcam or EEG headset. Before presenting, test camera permission/startup, face and landmark status, cursor alignment against all nine calibration targets, cursor and paint alignment, and blink/wink behavior at the chosen sensitivity in the intended room lighting. Confirm mouse and Space fallback if the camera is denied. Live ANT Neuro streaming is unavailable: the project has no vendor/LSL acquisition process, stream reader, device metadata/quality path, or live prediction transport. `/api/workload/replay` is the production model's recorded-data inference path; live hardware values are not currently sent to the frontend.
+Automated tests cover synthetic gaze mapping and interaction rules, not a physical webcam or EEG headset. Before presenting, test camera permission/startup, face and landmark status, gaze calibration, cursor travel in all four directions, center return, cursor/paint alignment, and blink/wink behavior at the chosen sensitivity in the intended room lighting. Confirm mouse fallback if the camera is denied. Live ANT Neuro streaming is unavailable: the project has no vendor/LSL acquisition process, stream reader, device metadata/quality path, or live prediction transport. `/api/workload/replay` is the production model's recorded-data inference path; live hardware values are not currently sent to the frontend.
 
 ### Workload data and interpretation
 
@@ -73,11 +98,11 @@ The current UAB task-condition model may be used only as a **cognitive-workload 
 
 ## Known limitations
 
-- Gaze calibration is a nine-point approximate mapping with a residual check; synthetic coordinate tests do not validate real-person accuracy or replace the documented nine-position human test.
-- Blink and wink thresholds are fixed experimental defaults and are not personalized; actual camera direction and selection reliability need human validation.
+- Head-pose control uses a neutral-pose sample and heuristic landmark features; it is not a validated gaze tracker or rigid pose solver. Synthetic mapping tests do not validate real-person direction or accuracy.
+- Blink/wink and double-blink thresholds are configurable experimental defaults, not user-personalized models; selection reliability needs human validation.
 - EEG workload estimation is recorded-replay only. Live ANT Neuro strain, signal quality, and resting-baseline calibration are not implemented.
 - EEG jaw-clench detection is disabled; the ANT Neuro gesture recordings need reviewed event intervals before a gesture model can be evaluated.
-- The high/low challenge conditions are available only in the clearly labeled user-set demo simulator until a valid live strain model and signal-quality path are connected.
+- Play uses camera eyebrow movement, not an EEG strain model, to make its target easier.
 - Webcam model/runtime assets are hosted externally and are fetched only after the user enables webcam mode.
 - There is no account or cloud sync. Saved artwork and its vector-like stroke history are stored in browser local storage.
 
@@ -86,6 +111,20 @@ The current UAB task-condition model may be used only as a **cognitive-workload 
 The optional Python pipeline lives in `ml/` and reads the original dataset in `workload_dataset/` without changing it. It trains on N-back **task-condition labels** only: test 1 is the documented low-workload position 1-back condition, test 2 is moderate arithmetic 1-back, and test 3 is high dual arithmetic 2-back. These are experimental task labels, not direct measurements or diagnoses of a participant’s internal mental state. The included dataset README does not define the numeric `phase` values; the pipeline uses phase 2 as the likely task interval based on its timing. Confirm that mapping against the original protocol before interpreting results.
 
 ### ANT Neuro gesture annotation
+
+To check an independently running LSL source, install `pylsl` in the project
+virtual environment if necessary, then run from the project root:
+
+```powershell
+.\venv\Scripts\python.exe ml\ant_neuro\test_lsl_connection.py
+```
+
+The diagnostic discovers streams for up to 30 seconds, then checks the first
+stream whose type is EEG for full channel metadata and samples for up to 10
+seconds. To choose a specific EEG source, add `--stream-name` followed by its
+exact name. The producer may omit channel names, types, or units; missing
+metadata must not be inferred. Receiving samples does not establish model
+compatibility or connect them to the application.
 
 The ANT Neuro EEG recordings are read directly from repository-root `.cnt`
 files with ANTIO/MNE and are not copied or modified. Their activity descriptions

@@ -17,7 +17,3 @@ export function shouldPauseForLostFace(
 ): boolean {
   return drawing && cameraActive && !faceDetected
 }
-
-export function canCompleteChallenge(coverage: number): boolean {
-  return Number.isFinite(coverage) && coverage >= 0.7
-}

@@ -1,3 +1,5 @@
+import type { ArtParticle } from './artParticles'
+
 export type StrokePoint = { x: number; y: number; timestamp: number }
 export type StrokeSegment = {
   from: StrokePoint
@@ -5,8 +7,16 @@ export type StrokeSegment = {
   brush: string
   color: string
   size: number
+  particles?: ArtParticle[]
 }
 export type RecordedStroke = { segments: StrokeSegment[] }
+
+export const PLAY_TRAIL_LIFETIME_MS = 2000
+
+export function playTrailOpacity(timestamp: number, now: number): number {
+  if (!Number.isFinite(timestamp) || !Number.isFinite(now)) return 0
+  return Math.max(0, 1 - Math.max(0, now - timestamp) / PLAY_TRAIL_LIFETIME_MS)
+}
 
 export function appendStrokeSegment(
   strokes: RecordedStroke[],
@@ -27,6 +37,7 @@ export function cloneStrokeHistory(strokes: RecordedStroke[]): RecordedStroke[] 
       ...segment,
       from: { ...segment.from },
       to: { ...segment.to },
+      particles: segment.particles?.map((particle) => ({ ...particle })),
     })),
   }))
 }

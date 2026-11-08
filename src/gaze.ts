@@ -28,32 +28,64 @@ function median(values: number[]): number {
     : (sorted[middle - 1] + sorted[middle]) / 2
 }
 
-export function summarizeGazeSamples(samples: GazePoint[]): {
+export type GazeSampleSummary = {
   point: GazePoint
   sampleCount: number
   stability: number
-} | null {
-  if (samples.length < 24 || samples.some(({ x, y }) => !Number.isFinite(x) || !Number.isFinite(y))) {
-    return null
+}
+
+export type GazeSampleResult =
+  | { status: 'ready'; summary: GazeSampleSummary }
+  | { status: 'insufficient' | 'unstable' }
+
+export type TimedGazeSample = { point: GazePoint; timestamp: number }
+
+export function evaluateGazeCapture(samples: TimedGazeSample[], now: number): GazeSampleResult {
+  const recent = samples
+    .filter(({ timestamp }) => Number.isFinite(timestamp) && timestamp <= now && now - timestamp <= 3000)
+    .sort((a, b) => a.timestamp - b.timestamp)
+  const latest = recent.filter(({ timestamp }) => now - timestamp <= 750)
+  if (latest.length < 2) return { status: 'insufficient' }
+  const result = evaluateGazeSamples(recent.map(({ point }) => point))
+  if (result.status !== 'ready') return result
+  const validLatest = latest.map(({ point }) => point)
+    .filter(({ x, y }) => Number.isFinite(x) && Number.isFinite(y))
+    .slice(-5)
+  if (validLatest.length < 2) return { status: 'insufficient' }
+  const current = { x: median(validLatest.map(({ x }) => x)), y: median(validLatest.map(({ y }) => y)) }
+  const tolerance = 0.035 + Math.min(0.03, result.summary.stability)
+  if (Math.hypot(current.x - result.summary.point.x, current.y - result.summary.point.y) > tolerance) {
+    return { status: 'unstable' }
   }
+  return result
+}
+
+export function evaluateGazeSamples(samples: GazePoint[]): GazeSampleResult {
+  const valid = samples.filter(({ x, y }) => Number.isFinite(x) && Number.isFinite(y))
+  if (valid.length < 12) return { status: 'insufficient' }
   const center = {
-    x: median(samples.map(({ x }) => x)),
-    y: median(samples.map(({ y }) => y)),
+    x: median(valid.map(({ x }) => x)),
+    y: median(valid.map(({ y }) => y)),
   }
-  const distances = samples.map(({ x, y }) => Math.hypot(x - center.x, y - center.y))
+  const distances = valid.map(({ x, y }) => Math.hypot(x - center.x, y - center.y))
   const medianDistance = median(distances)
   const distanceMad = median(distances.map((distance) => Math.abs(distance - medianDistance)))
   const outlierLimit = medianDistance + Math.max(0.012, 3 * 1.4826 * distanceMad)
-  const stable = samples.filter((_, index) => distances[index] <= outlierLimit)
-  if (stable.length < 18) return null
+  const stable = valid.filter((_, index) => distances[index] <= outlierLimit)
+  if (stable.length < Math.max(9, Math.ceil(valid.length * 0.6))) return { status: 'unstable' }
 
   const x = median(stable.map(({ x: value }) => value))
   const y = median(stable.map(({ y: value }) => value))
   const xMad = median(stable.map(({ x: value }) => Math.abs(value - x))) * 1.4826
   const yMad = median(stable.map(({ y: value }) => Math.abs(value - y))) * 1.4826
   const stability = Math.max(xMad, yMad)
-  if (stability > 0.035) return null
-  return { point: { x, y }, sampleCount: stable.length, stability }
+  if (stability > 0.06) return { status: 'unstable' }
+  return { status: 'ready', summary: { point: { x, y }, sampleCount: stable.length, stability } }
+}
+
+export function summarizeGazeSamples(samples: GazePoint[]): GazeSampleSummary | null {
+  const result = evaluateGazeSamples(samples)
+  return result.status === 'ready' ? result.summary : null
 }
 
 function solveAxis(
@@ -124,6 +156,32 @@ export function mapGazeToScreen(raw: GazePoint, map: GazeMap): GazePoint {
   }
 }
 
+export function orientGazeForScreen(point: GazePoint, flipHorizontal: boolean): GazePoint {
+  return { x: flipHorizontal ? 1 - point.x : point.x, y: point.y }
+}
+
+export function assessGazeCalibration(samples: GazeCalibrationPoint[]):
+  | { status: 'ready'; map: GazeMap }
+  | { status: 'mismatch'; index: number }
+  | { status: 'insufficient-range' } {
+  const map = fitGazeMap(samples)
+  if (!map || !Number.isFinite(map.rmse) || !Number.isFinite(map.maxError)) {
+    return { status: 'insufficient-range' }
+  }
+  if (map.rmse <= 0.25 && map.maxError <= 0.45) return { status: 'ready', map }
+  let worstIndex = 0
+  let worstError = -Infinity
+  samples.forEach(({ raw, target }, index) => {
+    const mapped = mapGazeToScreen(raw, map)
+    const error = Math.hypot(mapped.x - target.x, mapped.y - target.y)
+    if (error > worstError) {
+      worstError = error
+      worstIndex = index
+    }
+  })
+  return { status: 'mismatch', index: worstIndex }
+}
+
 export function smoothGazePoint(
   previous: GazePoint | null,
   target: GazePoint,
@@ -151,13 +209,15 @@ export function isGazeOutlier(
   return !pending || Math.hypot(point.x - pending.x, point.y - pending.y) > confirmationTolerance
 }
 
-export function estimateGaze(points: Landmark[]): GazePoint | null {
+export function estimateGaze(points: Landmark[], eyeOpenness?: { left: number; right: number }): GazePoint | null {
   if (points.length < 478) return null
   const eyes = [
     { corners: [33, 133], upper: [159, 160], lower: [145, 144], iris: [468, 469, 470, 471, 472] },
     { corners: [362, 263], upper: [386, 387], lower: [374, 373], iris: [473, 474, 475, 476, 477] },
   ]
-  const normalized = eyes.map(({ corners, upper, lower, iris }) => {
+  const normalized = eyes.map(({ corners, upper, lower, iris }, index) => {
+    const openness = index === 0 ? eyeOpenness?.right : eyeOpenness?.left
+    if (openness !== undefined && (!Number.isFinite(openness) || openness < 0.1)) return null
     const average = (indices: number[]) => ({
       x: indices.reduce((sum, index) => sum + points[index].x, 0) / indices.length,
       y: indices.reduce((sum, index) => sum + points[index].y, 0) / indices.length,
@@ -189,11 +249,13 @@ export function estimateGaze(points: Landmark[]): GazePoint | null {
     const verticalProjection = verticalLengthSquared > 0
       ? ((irisCenter.x - eyeTop.x) * vertical.x + (irisCenter.y - eyeTop.y) * vertical.y) / verticalLengthSquared
       : Number.NaN
-    if (horizontalLength < 1e-6 || verticalLengthSquared < 1e-10) return null
+    if (horizontalLength < 1e-6 || verticalLengthSquared < 1e-10
+      || !Number.isFinite(horizontalProjection) || !Number.isFinite(verticalProjection)) return null
     return { x: horizontalProjection, y: verticalProjection }
   })
-  if (normalized.some((eye) => eye === null)) return null
-  const x = normalized.reduce((sum, eye) => sum + eye!.x, 0) / normalized.length
-  const y = normalized.reduce((sum, eye) => sum + eye!.y, 0) / normalized.length
+  const usableEyes = normalized.filter((eye): eye is GazePoint => eye !== null)
+  if (!usableEyes.length) return null
+  const x = usableEyes.reduce((sum, eye) => sum + eye.x, 0) / usableEyes.length
+  const y = usableEyes.reduce((sum, eye) => sum + eye.y, 0) / usableEyes.length
   return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : null
 }

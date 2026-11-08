@@ -6,6 +6,9 @@ export type GestureState = {
   lastEventAt: number
 }
 
+const blinkCooldownMs = 120
+const winkCooldownMs = 420
+
 export const initialGestureState: GestureState = {
   candidate: null,
   startedAt: 0,
@@ -43,9 +46,7 @@ export function updateFacialGesture(
     if (!state.candidate) {
       return { state: { ...state, candidate, startedAt: timestamp }, event: null }
     }
-    if (state.candidate === 'blink' && timestamp - state.startedAt <= 120) {
-      return { state: { ...state, candidate }, event: null }
-    }
+    if (state.candidate === 'blink') return { state, event: null }
     if (state.candidate !== candidate) {
       return { state: { ...state, candidate, startedAt: timestamp }, event: null }
     }
@@ -55,10 +56,11 @@ export function updateFacialGesture(
   if (!bothOpen || !state.candidate) return { state, event: null }
   const duration = timestamp - state.startedAt
   let event: FacialGesture | null = null
-  if (timestamp - state.lastEventAt >= 420) {
-    if (state.candidate === 'blink' && duration >= 35 && duration <= 450) event = 'NORMAL_BLINK'
-    if (state.candidate === 'left-wink' && duration >= 350 && duration <= 1500) event = 'LEFT_WINK'
-    if (state.candidate === 'right-wink' && duration >= 350 && duration <= 1500) event = 'RIGHT_WINK'
+  const cooldownMs = state.candidate === 'blink' ? blinkCooldownMs : winkCooldownMs
+  if (timestamp - state.lastEventAt >= cooldownMs) {
+    if (state.candidate === 'blink' && duration >= 25 && duration <= 450) event = 'NORMAL_BLINK'
+    if (state.candidate === 'left-wink' && duration >= 120 && duration <= 1500) event = 'LEFT_WINK'
+    if (state.candidate === 'right-wink' && duration >= 120 && duration <= 1500) event = 'RIGHT_WINK'
   }
   return {
     state: {

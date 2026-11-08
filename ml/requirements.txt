@@ -7,6 +7,7 @@ fastapi>=0.110
 uvicorn[standard]>=0.27
 mne>=1.9
 antio>=0.3
+pylsl>=1.18.6
 scipy>=1.11
 streamlit>=1.30
 plotly>=5.18
